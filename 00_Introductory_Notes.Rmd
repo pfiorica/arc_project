@@ -1,0 +1,175 @@
+---
+title: "Introductory Filtering of ARC & Tumor Immune Contexture RNAseq Data"
+author: "Peter Fiorica"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r packages_libaries}
+
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(readxl))
+suppressPackageStartupMessages(library(DT))
+suppressPackageStartupMessages(library(DESeq2))
+suppressPackageStartupMessages(library(BiocGenerics))
+suppressPackageStartupMessages(library(gtsummary))
+
+
+"%&%"=function(a,b) paste(a,b,sep="")
+
+rnaseq.dir <- "/projects/rpci/songyao/pnfioric/arc_project/"
+```
+
+# Introduction
+
+Date: 15 July 2025
+
+Song, Rabsa, and I met to discuss the RNAseq data that Li Yan processed. I transferred the files from Globus and put them in CCR at `/projects/rpci/songyao/pnfioric/arc_project/data_from_li_yan/`.
+
+In the directory, there are four files:
+
+  * `dds_excluded.rds`     
+  * `dds_Gong_Yao_QC.rds`
+  * `dds_Gong_Yao.rds`
+  * `files.md`
+  
+Dr. Yan described these files n an email on 10 July 2025, where he writes:
+
+> The  dds_Gong_Yao.rds include all samples, and the dds_Gong_Yao_QC.rds contains only the QC samples. The dds_excluded.rds contains the samples we decided to exclude from the analysis in previous QC discussions. SO for future analysis you may want to exclude samples from either of the two files.
+
+# Document Goals:
+
+1) Describe the contents of the files.
+
+2) Filter a final set of files for Rabsa to use that include all of the East Asian samples from ARC and the White samples from the tumor immune contexture data.
+
+# Inspecting the files
+
+```{r read_in_files}
+dds_Gong_Yao <- readRDS(rnaseq.dir %&% "data_from_li_yan/dds_Gong_Yao.rds")
+dds_Gong_Yao_QC <- readRDS(rnaseq.dir %&% "data_from_li_yan/dds_Gong_Yao_QC.rds") 
+dds_excluded <- readRDS(rnaseq.dir %&% "data_from_li_yan/dds_excluded.rds")
+
+tils_sample_info <-fread(rnaseq.dir %&% "tils_immune_contexture_sample_info_pnf_05092025.txt", header = T)
+```
+
+Next, let's see what is in each of these R objects
+
+```{r file_structure}
+str(dds_Gong_Yao_QC)
+#str(dds_Gong_Yao_QC)
+#str(dds_excluded)
+
+design <- dds_Gong_Yao_QC@design
+
+row_range <- dds_Gong_Yao_QC@rowRanges
+str(row_range)
+
+coldata <- as.data.table(dds_Gong_Yao_QC@colData)
+str(coldata)
+
+assays <- dds_Gong_Yao_QC@assays@data
+str(assays)
+
+ele_metadata <- dds_Gong_Yao_QC@ elementMetadata
+str(ele_metadata)
+
+metadata <- str(dds_Gong_Yao_QC@metadata)
+```
+
+The code above shows the description of `dds_Gong_Yao_QC`, which includes 91 samples. I am going to assume that the structure of the other two files are the same where they are both reported as `Large DESeqDataSet`s. 
+
+
+
+```{r subset_coldata}
+coldata <- as.data.table(colData(dds_Gong_Yao))
+coldata_exclude <- as.data.table(colData(dds_excluded))
+```
+
+#### Breakdown of the full dataset
+```{r}
+table(coldata$project, coldata$race)
+```
+
+There are 21 and 24 White and Black samples in the ARC dataset, respectively because these files were used as replication checks. ***I will be removing the samples*** in the data we provide to Rabsa, so there are no duplicate individuals.
+
+```{r}
+table(coldata_exclude$race)
+```
+
+In the samples to exclude, we see that they are primarily East Asian samples with two Black samples. 
+
+# Filtering Samples
+
+The next step of the process will be filtering the samples to share a dataset with Rabsa. I will be completing the following steps:
+
+  1) Remove the samples in `dds_excluded` from `dds_Gong_Yao` from data. This will remove low quality samples that have questionable reliability.
+  2) Remove any non `AsA` samples in the `Yao` project of the data.  This will ensure that no duplicate individuals with multiple samples exist in the data.
+  3) Remove non-White samples from the `Gong` project of the data. Since the comparison of Rabsa will be making is White vs. East Asian. We will be removing all `AA` samples. These should remove both tumor and normal AA individuals.
+  4) Remove any samples that do not exist in reference data (`tils_sample_info`) that was previously filtered to exclude questionnable samples.
+  
+**Beginning:** I am starting with `r nrow(colData(dds_Gong_Yao))` Samples
+  
+## Step 1: Remove Samples from dds excluded
+
+```{r step1_remove_dds_excluded}
+# Filter by FASTQ IDs
+dds_Gong_Yao_step1 <- dds_Gong_Yao[, !colData(dds_Gong_Yao)$FASTQ_RS %in% coldata_exclude$FASTQ_RS]
+
+print(nrow(colData(dds_Gong_Yao_step1)) %&% " Samples remain after filtering in Step 1")
+```
+
+## Step 2: Remove non AsA samples in Yao project
+```{r step2_remove_non_AsA_samples of Yao project}
+# Select Samples to remove as a data.table
+# Te samples are non AsA AND Project is Yao
+samples_to_remove_in_step2 <- as.data.frame(colData(dds_Gong_Yao_step1)) %>%
+  filter(race != "AsA",
+         project == "Yao")
+
+# Filter by FASTQ IDs
+dds_Gong_Yao_step2 <- dds_Gong_Yao_step1[, !colData(dds_Gong_Yao_step1)$FASTQ_RS %in% samples_to_remove_in_step2$FASTQ_RS]
+
+print(nrow(colData(dds_Gong_Yao_step2)) %&% " Samples remain after filtering in Step 2")
+```
+
+## Step 3: Remove non-EA samples from Gong project
+```{r step3_remove_non_EA_samples of Gong project}
+# Select Samples to remove as a data.table
+# Te samples are non AsA AND Project is Yao
+samples_to_remove_in_step3 <- as.data.frame(colData(dds_Gong_Yao_step2)) %>%
+  filter(race != "EA",
+         project == "Gong")
+
+# Filter by FASTQ IDs
+dds_Gong_Yao_step3 <- dds_Gong_Yao_step2[, !colData(dds_Gong_Yao_step2)$FASTQ_RS %in% samples_to_remove_in_step3$FASTQ_RS]
+
+print(nrow(colData(dds_Gong_Yao_step3)) %&% " Samples remain after filtering in Step 3")
+```
+
+## Step 4: Remove excluded samples from sample info of tumor contexture
+We are removing these samples because they were identified excluded in the process of troubleshooting IDs during the Documenting_ID_Mismatch in March of 2025.
+```{r step4_remove_exclude_samples_from_sample_info}
+samples_to_remove_in_step4 <- as.data.frame(colData(dds_Gong_Yao_step3)) %>%
+  filter(project == "Gong",
+         !patientID %in% tils_sample_info$studyid)
+
+dds_Gong_Yao_step4 <- dds_Gong_Yao_step3[, !colData(dds_Gong_Yao_step3)$FASTQ_RS %in% samples_to_remove_in_step4$FASTQ_RS]
+print(nrow(colData(dds_Gong_Yao_step4)) %&% " Samples remain after filtering in Step 4")
+```
+
+# Inspecting Final Data
+After the four removal steps, we should have a file that includes only AsA and EA samples. All the EA samples should be from the Gong project and all the AsA samples should be from the Yao project.
+
+```{r}
+final_coldata <- as.data.table(colData(dds_Gong_Yao_step4))
+
+final_coldata %>%
+  select(project, er, race, study, Pam50) %>%
+  tbl_summary(by = project)
+```
+
+```{r}
+write_rds(dds_Gong_Yao_step4, rnaseq.dir %&% "AsA_EA_Samples_GongYao.rds")
+```
