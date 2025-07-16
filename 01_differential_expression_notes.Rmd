@@ -1,0 +1,204 @@
+---
+title: "DESeq Notes ARC Project"
+author: "Peter Fiorica"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r load packages}
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(DESeq2))
+suppressPackageStartupMessages(library(gridExtra))
+suppressPackageStartupMessages(library(ggExtra))
+suppressPackageStartupMessages(library(readxl))
+suppressPackageStartupMessages(library(ggrepel))
+suppressPackageStartupMessages(library(DT))
+suppressPackageStartupMessages(library(EnhancedVolcano))
+suppressPackageStartupMessages(library(UpSetR))
+suppressPackageStartupMessages(library(vsn))
+library(ggforce)
+"%&%"=function(a,b) paste(a,b,sep="")
+arc_dir<- "/projects/rpci/songyao/pnfioric/arc_project/"
+tils_dir <- "/projects/rpci/songyao/pnfioric/tils_r01_RNAseq/"
+
+source("/projects/rpci/songyao/pnfioric/MultiEthnic_TILs_GWAS/Tractor/accessory_scripts/plotting.R")
+```
+
+# Introduction
+
+This document serves as a template for running the DE analysis on the ARC data. It uses the TILs data as a template
+
+# Step 0: Load functions
+This chunk of code loads 2 main functions: one to perform the DE analysis and the other to pull the Bonferroni -significant genes from the results. Additionally, I loaded a few different plotting functions from the script I source when I load the package.
+
+```{r load_funcitons}
+#####
+#
+
+# DESeq Function
+run_deseq_analysis <- function(count_data, 
+                               col_data, # Sample information
+                               gene_info, # Gene annotation File
+                               design_formula) {
+  # Create DESeqDataSet from matrix
+  dds <- DESeqDataSetFromMatrix(countData = count_data,
+                                colData = col_data, 
+                                design = design_formula)
+  
+  # Run DESeq analysis
+  dds <- DESeq(dds)
+  IV <- resultsNames(dds)[2]
+  print("Reporting results for expression related to: " %&% paste(IV))
+  res <- results(dds, name = paste(IV))
+  
+  # Perform log fold change shrinkage using apeglm
+  res <- lfcShrink(dds, coef = paste(IV), type = "apeglm")
+  # Convert results to data.table
+  output <- as.data.table(res@listData)
+  output$gene_id <- res@rownames
+  # Merge with gene_info
+  output <- output %>% left_join(gene_info, by = c("gene_id" = "Gene stable ID version"))
+  # Return the final output data.table
+  return(output)
+}
+
+get_bonf_genes <-  function(dt) {
+  dt %>%
+    filter(pvalue < 0.05/nrow(dt)) %>%
+    select(gene_id)
+}
+```
+
+# Step 1: Load & Format data
+
+The ARC data is loaded as a dds object, but below we will be loading the corresponding TIL data that relates to it.
+```{r loading data}
+# Count Data
+expected_count<-fread(tils_dir %&% "count_data/all_samples_expected_count.txt")
+
+# Phenotypic Information (Coldata)
+sample_info <-fread(tils_dir %&% "Phenotype_Sample_Info_wchs_nsbcs_pathways_w_tils_and_origsampetype_pam50_cibersort_iges_danaher_0506_2025.txt", header = T) %>% filter(stage!="0")
+
+# Information about genes:
+gene_info <- fread(tils_dir %&% "mart_export_gene_type.txt", header =T)
+
+
+# Format the Coldata
+coldata <- sample_info %>% # Using the sample_info object, we will format the data, so it selects the FASTQ ID (RS_ID), study and race, and tissue source
+  select(RS_ID, Study=study, Race=race,ER, typeoforigsamples) %>% # We rename the race and study variable for downstream code, but it is not need as long as the downstream code is edited
+  filter(Study != "Komen") %>% # Remove the non-tumor samples
+  mutate(ER= if_else(ER=="ER+", "pos", # Re-label the ER variables as needed. 
+                     if_else(ER=="ER-", "neg", ER)))
+
+rownames(coldata) <- coldata$RS_ID # Set the rownames as the FASTQ ID, which is the label of the count data.
+```
+
+Before going further, we can take a look at the structure of each file/object:
+
+```{r preview files}
+expected_count[1:6, 1:10]
+
+head(coldata)
+```
+
+### Re-format data
+
+Now, we need to reformat the data so that the RS_IDs match up across coldata and counts.
+
+```{r data_formatting}
+expected_count_bc <- expected_count %>% select(gene_id, coldata$RS_ID)
+
+# Split genes by LNC status
+
+### This step was performed to separate the lncRNA's since Dr. Gong was working with that data, but it does not need to be performed for the ARC data.
+non_lnc_gene_info <- gene_info %>% filter(`Gene type` != "lncRNA")
+lnc_gene_info <- gene_info %>% filter(`Gene type` == "lncRNA")
+
+
+# Gene Data Filtering
+# This line tests if the value in a cell in a row is >5. It records it as 1 or 0. Row mean is >0.1, then it reports it in the object idx
+# We are looking for genes wehere greater than 95% of the counts are five.
+idx <- rowMeans(expected_count_bc == 5) > .95
+expected_count_bc_filt <- expected_count_bc[!idx,]
+
+# remove LNC rnas
+expected_count_bc_filt <- expected_count_bc_filt %>% filter(!gene_id %in% lnc_gene_info$`Gene stable ID version`)
+gene_list <- expected_count_bc_filt$gene_id
+
+
+# Make into matrix for dds object
+expected_count_bc_filt <- round(expected_count_bc_filt[,2:ncol(expected_count_bc_filt)]) 
+print("There are " %&% nrow(expected_count_bc_filt) %&% " that pass the filters for our analysis.")
+expected_count_bc_filt <- as.matrix(expected_count_bc_filt)
+rownames(expected_count_bc_filt) <- gene_list
+```
+
+
+# Step 2: Run differential expression analysis
+
+### Method 1: Peter's function
+
+The simplest way to run DESeq2 at this point is to use the function I made.  The function takes count data, coldata, gene annotation information, and a formula of covariates for regression.
+
+This step takes a long time.
+```{r step 2_peters_function}
+output_race_no_er <- run_deseq_analysis(expected_count_bc_filt, coldata, 
+  gene_info = gene_info, 
+  design_formula = ~ Race + Study + typeoforigsamples)
+```
+
+Now, we can preview the results, and see that these results have generally everything we are looking for.
+```{r preview results}
+head(output_race_no_er)
+```
+
+### Method 2: Formal way
+
+This formal method deals with defining a dds object, which is the current format of the ARC data.
+
+```{r}
+# Define a counts variable... This is slightly redundant, but I am doing it for clarity's sake
+count_data <- expected_count_bc_filt
+
+# Define coldata variable
+col_data <- coldata
+
+# Define formula for regression
+design_formula <- as.formula("~ Race + Study + typeoforigsamples")
+
+dds <- DESeqDataSetFromMatrix(countData = count_data,
+                                colData = col_data, 
+                                design = design_formula)
+  
+# Run DESeq analysis
+dds <- DESeq(dds)
+IV <- resultsNames(dds)[2]
+
+# Perform log fold change shrinkage using apeglm
+res <- lfcShrink(dds, coef = paste(IV), type = "apeglm")
+
+# Convert Results into data.table
+output <- as.data.table(res@listData)
+# Make Gene ID for labels
+output$gene_id <- res@rownames
+```
+
+Join the results to reference data.
+```{r}
+output <- output %>% left_join(gene_info, by = c("gene_id" = "Gene stable ID version"))
+
+mod_mat <- model.matrix(design(dds), colData(dds))
+
+head(mod_mat)
+```
+
+The model matrix (mod_mat) above will tell us which of the two options in the binary variable is our reference. In this situation, "RaceWhite" is being measured so the reference in "Black." The changes below are differences observed in tumors from White Women relative to tumors from Black women
+
+# Step 3: Visualize Results
+```{r volcano plot}
+volcano_plot(output,
+             gene_name_col = "Gene name",
+             hard_threshold = 1e-7,
+             threshold = 0.05/nrow(output)) +ggtitle("Race Differences (No Adjustment)")
+```
