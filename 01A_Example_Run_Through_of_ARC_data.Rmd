@@ -1,0 +1,84 @@
+---
+title: "Sample Run Through of ARC DE Seq"
+author: "Peter Fiorica"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup}
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(DESeq2))
+suppressPackageStartupMessages(library(gridExtra))
+suppressPackageStartupMessages(library(ggExtra))
+suppressPackageStartupMessages(library(readxl))
+suppressPackageStartupMessages(library(ggrepel))
+suppressPackageStartupMessages(library(DT))
+suppressPackageStartupMessages(library(EnhancedVolcano))
+suppressPackageStartupMessages(library(UpSetR))
+suppressPackageStartupMessages(library(vsn))
+library(ggforce)
+"%&%"=function(a,b) paste(a,b,sep="")
+arc_dir<- "/projects/rpci/songyao/pnfioric/arc_project/"
+tils_dir <- "/projects/rpci/songyao/pnfioric/tils_r01_RNAseq/"
+
+source("/projects/rpci/songyao/pnfioric/MultiEthnic_TILs_GWAS/Tractor/accessory_scripts/plotting.R")
+```
+
+```{r load data}
+arc_dds <- readRDS(arc_dir %&% "AsA_EA_Samples_GongYao.rds")
+
+gene_info <- fread(tils_dir %&% "mart_export_gene_type.txt", header = T)
+
+til_sample_info <- fread(tils_dir %&% "Phenotype_Sample_Info_wchs_nsbcs_pathways_w_tils_and_origsampetype_pam50_cibersort_iges_danaher_tcr_05092025.txt", header = T)
+
+```
+
+```{r run_DE_analysis_annotate}
+arc_counts<- counts(arc_dds)
+arc_coldata <- colData(arc_dds)
+arc_coldata_dt <- as.data.table(colData(arc_dds))
+design_formula <- as.formula("~ race + er")
+
+dds <- DESeqDataSetFromMatrix(countData = arc_counts,
+                                colData = arc_coldata, 
+                                design = design_formula)
+
+
+dds <- DESeq(dds)
+IV <- resultsNames(dds)[2]
+print("Reporting results for expression related to: " %&% paste(IV))
+res <- results(dds, name = paste(IV))
+
+# Perform log fold change shrinkage using apeglm
+res <- lfcShrink(dds, coef = paste(IV), type = "apeglm")
+# Convert results to data.table
+output <- as.data.table(res@listData)
+output$gene_id <- res@rownames
+
+output <- output %>% left_join(gene_info, by = c("gene_id" = "Gene stable ID version"))
+
+mod_mat <- model.matrix(design(dds), colData(dds))
+mod_mat
+```
+
+
+```{r}
+volcano_plot(output,
+             gene_name_col = "Gene name",
+             hard_threshold = 1e-7,
+             threshold = 0.05/nrow(output)) +ggtitle("Gene Associated with AsA, adjusted for ER")
+
+table(output$padj < (0.05/nrow(output)))
+```
+
+# To Do: 
+1A) Filter low count genes
+1B) Document which genes are removed
+2) Filter "unknown" ER status (for now)
+3A) Separate `study` variable into 3 sub-variables
+        ---> Split into Study (ARC/Pathways/NYBCS/WCHS), site (ASAM_USC/BCRF_NC/Pathways/NYBCS/WCHS), sample type (slides/curls/cores/etc.) 
+3B) Plot PCA by each of these study variables for PCs 1-4
+4) Re-perform DESeq analysis adjusting for these three new values in the formula
+5) Explore [COMBAT](https://rdrr.io/bioc/sva/man/ComBat.html) for Batch corrections.
+      A) This step can be performed by Peter, but it can be performed later after discussing with Song.
