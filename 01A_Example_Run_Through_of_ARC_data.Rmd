@@ -82,3 +82,20 @@ table(output$padj < (0.05/nrow(output)))
 4) Re-perform DESeq analysis adjusting for these three new values in the formula
 5) Explore [COMBAT](https://rdrr.io/bioc/sva/man/ComBat.html) for Batch corrections.
       A) This step can be performed by Peter, but it can be performed later after discussing with Song.
+      
+      
+```{r histogram}
+colnames(arc_counts) <- arc_dds$FASTQ_RS
+
+t_counts <- as.data.frame(t(arc_counts))
+t_counts$avg_exp <- rowMeans(t_counts)
+t_counts$FASTQ_RS <- row.names(t_counts)
+
+t_counts_info <- left_join(arc_coldata_dt, t_counts, by = "FASTQ_RS")
+```
+
+```{r}
+ggplot(t_counts_info, aes(x=avg_exp, fill = race))+
+  geom_density(alpha = 0.5)+
+  theme_bw()
+```
