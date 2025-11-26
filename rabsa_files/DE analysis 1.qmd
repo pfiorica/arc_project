@@ -1,0 +1,843 @@
+---
+title: "DE analysis 1"
+format: html
+editor: visual
+---
+
+## Quarto
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+## Running Code
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r}
+
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("DESeq2")
+
+library(DESeq2)
+
+```
+
+You can add options to executable code like this
+
+```{r}
+
+library(haven)
+library(rmarkdown)
+
+# Load libraries
+library(readxl)
+library(dplyr)
+library(tidyr)
+library(openxlsx) 
+library(ggplot2)
+library(broom)
+library(purrr)
+library(vcd)
+library(survival)
+library(survminer)
+library(survMisc)
+library(cmprsk)
+library(forestplot)
+library(tidyverse)
+
+
+```
+
+```{r}
+
+#arc_updated <- readRDS('C:\\Users\\ra59963\\OneDrive - Roswell Park Comprehensive Cancer Center\\AsA_EA_Samples_GongYao.rds')
+
+arc_updated <- readRDS("/Users/ra59963/Downloads/AsA_EA_Samples_GongYao.rds")
+```
+
+```{r}
+
+fd1 <- rowData(arc_updated) |> as.data.frame()
+colnames(fd1)
+
+
+```
+
+```{r}
+
+pd1 <- colData(arc_updated) |> as.data.frame()
+colnames(pd1)
+```
+
+```{r}
+
+
+dds <- arc_updated[fd1$targeted, ]
+dds
+
+
+```
+
+```{r}
+
+#excluding samples with unknown ER status for now
+
+dds <- dds[, colData(dds)$er != "unknown"]
+dds
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+#Sample info 
+
+pd <- colData(dds) |> as.data.frame()
+colnames(pd)
+
+```
+
+```{r}
+
+pd |> group_by(er) |> tally()
+```
+
+```{r}
+
+pd |> group_by(race) |> tally()
+```
+
+```{r}
+
+pd |> group_by(race, er) |> tally()
+```
+
+```{r}
+
+# Protein-coding genes (v44)
+dds_prot_44 <- dds[rowData(dds)$gene_type_44 == "protein_coding", ]
+dds_prot_44 <- dds_prot_44[rowSums(counts(dds_prot_44)) > 0, ]  # drop all-zero
+dim(dds_prot_44)
+
+#filtering with gene_type_22 gives me NA
+
+```
+
+```{r}
+
+names(rowData(dds))
+head(as.data.frame(rowData(dds)))
+
+
+```
+
+```{r}
+
+unique(rowData(dds)$gene_type_44)
+
+```
+
+```{r}
+
+unique(rowData(dds)$gene_type_22)
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+# ONLY filtering out lincRNA
+dds_nonlnc <- dds[rowData(dds)$gene_type_44 != 'lncRNA', ]
+dds_nonlonc <- dds_nonlnc[rowSums(counts(dds_nonlnc)) > 0, ]  # drop all-zero
+dim(dds_nonlonc)
+
+#filtering with gene_type_22 gives me NA
+
+```
+
+```{r}
+
+# Keep only ER-positive samples
+dds_prot_44_erpos <- dds_prot_44[, colData(dds_prot_44)$er == "positive"]
+
+# Check new dimensions
+dim(dds_prot_44_erpos)
+
+
+```
+
+```{r}
+
+# Keep only ER-Negative samples
+dds_prot_44_erneg <- dds_prot_44[, colData(dds_prot_44)$er == "negative"]
+
+# Check new dimensions
+dim(dds_prot_44_erneg)
+
+```
+
+```{r}
+
+#Sample info for ER Negative 
+
+pd_prot_erneg <- colData(dds_prot_44_erneg) |> as.data.frame()
+colnames(pd_prot_erneg)
+
+
+#need to perform 3 DE analysis: one with all ER status, all with ER positive, all with ER negative 
+
+
+counts_prot_erneg <- counts(dds_prot_44_erneg)  # matrix of raw counts
+
+#rows = genes and columns = samples 
+
+rownames(pd_prot_erneg) <- pd_prot_erneg$FASTQ_RS # Set the rownames as the FASTQ ID, which is the label of the count data.
+
+```
+
+```{r}
+
+#Sample info for ER Positive
+
+pd_prot_erpos <- colData(dds_prot_44_erpos) |> as.data.frame()
+colnames(pd_prot_erpos)
+
+
+#need to perform 3 DE analysis: one with all ER status, all with ER positive, all with ER negative 
+
+
+counts_prot_erpos <- counts(dds_prot_44_erpos)  # matrix of raw counts
+
+#rows = genes and columns = samples 
+
+rownames(pd_prot_erpos) <- pd_prot_erpos$FASTQ_RS # Set the rownames as the FASTQ ID, which is the label of the count data.
+
+
+```
+
+```{r}
+
+#Sample info 
+
+pd_prot <- colData(dds_prot_44) |> as.data.frame()
+colnames(pd_prot)
+```
+
+```{r}
+
+#Sample info 
+
+pd_nonlnc <- colData(dds_nonlnc) |> as.data.frame()
+colnames(pd_nonlnc)
+```
+
+```{r}
+
+#need to perform 3 DE analysis: one with all ER status, all with ER positive, all with ER negative 
+
+
+counts_prot_meta <- counts(dds_prot_44)  # matrix of raw counts
+counts_nonlnc <- counts(dds_nonlnc)  # matrix of raw counts
+
+#rows = genes and columns = samples 
+
+rownames(pd_prot) <- pd_prot$FASTQ_RS # Set the rownames as the FASTQ ID, which is the label of the count data.
+
+rownames(pd_nonlnc) <- pd_nonlnc$FASTQ_RS # Set the rownames as the FASTQ ID, which is the label of the count data.
+```
+
+```{r}
+
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("biomaRt")
+library(biomaRt)
+
+# Connect to Ensembl
+mart <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+
+```
+
+```{r}
+
+# Query Ensembl for gene info
+gene_info <- getBM(
+  attributes = c("ensembl_gene_id",   # Ensembl ID
+                 "hgnc_symbol",       # Gene symbol
+                 "gene_biotype"),     # Biotype (e.g., protein_coding, lncRNA, etc.)
+  mart = mart
+)
+
+# Preview
+head(gene_info)
+
+```
+
+```{r}
+
+# Keep genes with counts > 10 in at least 10% of samples
+keep_prot <- rowMeans(counts_prot_meta > 10) > 0.1
+counts_prot_meta <- counts_prot_meta[keep_prot, ]
+
+keep_nonlnc <- rowMeans(counts_nonlnc > 10) > 0.1
+counts_nonlnc <- counts_nonlnc[keep_nonlnc, ]
+
+```
+
+```{r}
+
+# Keep genes with counts > 10 in at least 10% of samples for ER Positive 
+keep_prot <- rowMeans(counts_prot_erpos > 10) > 0.1
+counts_prot_erpos <- counts_prot_erpos[keep_prot, ]
+
+
+# Keep genes with counts > 10 in at least 10% of samples for ER Negative
+keep_prot <- rowMeans(counts_prot_erneg > 10) > 0.1
+counts_prot_erneg <- counts_prot_erneg[keep_prot, ]
+```
+
+```{r}
+
+
+
+# Check dimensions
+dim(counts_prot_erpos)
+# Check dimensions
+dim(counts_prot_erneg)
+
+```
+
+```{r}
+
+
+colnames(counts_prot_meta) <- colData(dds_prot_44)$FASTQ_RS
+
+head(colnames(counts_prot_meta))       # sample IDs in your counts matrix
+
+
+colnames(counts_nonlnc) <- colData(dds_nonlnc)$FASTQ_RS
+
+head(colnames(counts_nonlnc))       # sample IDs in your counts matrix
+```
+
+```{r}
+
+
+
+```
+
+```{r}
+
+# Subset the matrix by your selected FASTQ_RS sample IDs
+counts_nonlnc_meta <- counts_nonlnc[, pd_nonlnc$FASTQ_RS, drop = FALSE]
+
+# Check dimensions
+dim(counts_nonlnc_meta)
+
+# Optional: confirm sample IDs match
+colnames(counts_nonlnc_meta)[1:5]   # peek at first 5
+
+```
+
+```{r}
+
+
+# Keep genes with counts > 10 in at least 10% of samples
+keep_prot <- rowMeans(counts_prot_meta > 10) > 0.1
+counts_prot_meta <- counts_prot_meta[keep_prot, ]
+
+keep_nonlnc <- rowMeans(counts_nonlnc > 10) > 0.1
+counts_nonlnc <- counts_nonlnc[keep_nonlnc, ]
+
+
+```
+
+```{r}
+
+# Check dimensions for ER positive and negative
+dim(counts_prot_erpos)
+# Check dimensions
+dim(counts_prot_erneg)
+
+str(pd_prot_erpos$race)   # should be Factor
+str(pd_prot_erpos$er)     # should be Factor
+
+str(pd_prot_erneg$race)   # should be Factor
+str(pd_prot_erneg$er)     # should be Factor
+
+
+```
+
+```{r}
+
+# Check dimensions
+dim(counts_prot_meta)
+# Check dimensions
+dim(counts_nonlnc)
+
+str(pd_prot$race)   # should be Factor
+str(pd_prot$er)     # should be Factor
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+#padj in DE is BH or FDR correction by default, NOT Bonferroni correction
+
+# Define formula for regression
+design_formula <- as.formula("~ race + er")
+
+dds_prot_aller <- DESeqDataSetFromMatrix(countData = counts_prot_meta,
+                                colData = pd_prot, 
+                                design = design_formula)
+  
+# Run DESeq analysis
+dds_prot_aller_DE <- DESeq(dds_prot_aller)
+
+
+```
+
+```{r}
+
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("apeglm")
+library(apeglm)
+
+```
+
+```{r}
+
+#EA and positive are references 
+
+resultsNames(dds_prot_aller_DE)
+
+
+```
+
+```{r}
+
+# Perform log fold change shrinkage using apeglm
+res_race_aller <- lfcShrink(dds_prot_aller_DE, coef="race_AsA_vs_EA", type="apeglm")
+```
+
+```{r}
+
+
+# Remove version numbers from Ensembl IDs
+rownames(res_race_aller) <- gsub("\\.\\d+$", "", rownames(res_race_aller))
+
+# Connect to Ensembl
+mart <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+
+annotations <- getBM(
+  attributes = c("ensembl_gene_id", "external_gene_name"),
+  filters = "ensembl_gene_id",
+  values = rownames(res_race_aller),
+  mart = mart
+)
+annotations <- annotations[!duplicated(annotations$ensembl_gene_id), ]
+
+# Merge annotations
+res_race_df_aller <- as.data.frame(res_race_aller)
+res_race_df_aller$ensembl_gene_id <- rownames(res_race_df_aller)
+res_race_df_aller <- merge(res_race_df_aller, annotations,
+                     by.x = "ensembl_gene_id",
+                     by.y = "ensembl_gene_id",
+                     all.x = TRUE)
+
+# Fallback to Ensembl ID if symbol is missing
+res_race_df_aller$gene_symbol <- ifelse(is.na(res_race_df_aller$external_gene_name),
+                                  res_race_df_aller$ensembl_gene_id,
+                                  res_race_df_aller$external_gene_name)
+
+
+```
+
+```{r}
+
+bonferroni_cutoff <- 0.05 / nrow(res_race_df_aller)
+res_race_df_aller$signif_bonferroni <- res_race_df_aller$padj < bonferroni_cutoff
+
+# Optional: pick top significant genes to label
+top_genes <- head(res_race_df_aller$gene_symbol[order(res_race_df_aller$padj)], 20)
+
+```
+
+```{r}
+
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("EnhancedVolcano")
+library(EnhancedVolcano)
+
+
+```
+
+```{r}
+
+# Count the number of genes passing Bonferroni correction
+num_bonferroni_genes <- sum(res_race_df_aller$signif_bonferroni, na.rm = TRUE)
+num_bonferroni_genes
+
+
+bonferroni_cutoff <- 0.05 / nrow(res_race_df_aller)
+bonferroni_cutoff
+
+
+```
+
+```{r}
+
+
+```
+
+```{r}
+
+# Logical vector: TRUE if gene passes both thresholds
+res_race_df_aller$signif_strict <- (res_race_df_aller$padj < bonferroni_cutoff) & 
+                             (abs(res_race_df_aller$log2FoldChange) > 1)
+
+# Number of genes passing both criteria
+sum(res_race_df_aller$signif_strict)
+
+sig_genes <- subset(res_race_df_aller, signif_strict == TRUE)
+
+
+```
+
+```{r}
+
+# Select top 20 most significant genes for labeling
+top_genes <- head(sig_genes$gene_symbol[order(sig_genes$padj)], 20)
+
+EnhancedVolcano(
+  res_race_df_aller,
+  lab = res_race_df_aller$gene_symbol,
+  x = 'log2FoldChange',
+  y = 'padj',
+  pCutoff = bonferroni_cutoff,
+  FCcutoff = 1,
+  selectLab = top_genes,
+  drawConnectors = TRUE,
+  max.overlaps = 15
+)
+
+
+```
+
+```{r}
+
+# Install if not already installed
+install.packages("writexl")
+
+library(writexl)
+
+# Save res_race_df_aller as Excel
+write_xlsx(res_race_df_aller, "DEseq with all ER.xlsx")
+
+```
+
+```{r}
+
+#DEseq for ER positive samples
+
+#padj in DE is BH or FDR correction by default, NOT Bonferroni correction
+
+# Define formula for regression
+design_formula <- as.formula("~ race")
+
+dds_prot_erpos <- DESeqDataSetFromMatrix(countData = counts_prot_erpos,
+                                colData = pd_prot_erpos, 
+                                design = design_formula)
+  
+# Run DESeq analysis
+dds_prot_erpos_DE <- DESeq(dds_prot_erpos)
+
+
+```
+
+```{r}
+
+#EA and positive are references 
+
+resultsNames(dds_prot_erpos_DE)
+
+# Perform log fold change shrinkage using apeglm
+res_race_erpos <- lfcShrink(dds_prot_erpos_DE, coef="race_AsA_vs_EA", type="apeglm")
+
+
+```
+
+```{r}
+
+# Remove version numbers from Ensembl IDs
+rownames(res_race_erpos) <- gsub("\\.\\d+$", "", rownames(res_race_erpos))
+
+# Connect to Ensembl
+mart <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+
+annotations <- getBM(
+  attributes = c("ensembl_gene_id", "external_gene_name"),
+  filters = "ensembl_gene_id",
+  values = rownames(res_race_erpos),
+  mart = mart
+)
+annotations <- annotations[!duplicated(annotations$ensembl_gene_id), ]
+
+# Merge annotations
+res_race_df_erpos <- as.data.frame(res_race_erpos)
+res_race_df_erpos$ensembl_gene_id <- rownames(res_race_df_erpos)
+res_race_df_erpos <- merge(res_race_df_erpos, annotations,
+                     by.x = "ensembl_gene_id",
+                     by.y = "ensembl_gene_id",
+                     all.x = TRUE)
+
+# Fallback to Ensembl ID if symbol is missing
+res_race_df_erpos$gene_symbol <- ifelse(is.na(res_race_df_erpos$external_gene_name),
+                                  res_race_df_erpos$ensembl_gene_id,
+                                  res_race_df_erpos$external_gene_name)
+
+
+
+```
+
+```{r}
+
+bonferroni_cutoff <- 0.05 / nrow(res_race_df_erpos)
+res_race_df_erpos$signif_bonferroni <- res_race_df_erpos$padj < bonferroni_cutoff
+
+# Optional: pick top significant genes to label
+top_genes <- head(res_race_df_erpos$gene_symbol[order(res_race_df_erpos$padj)], 20)
+
+# Count the number of genes passing Bonferroni correction
+num_bonferroni_genes <- sum(res_race_df_erpos$signif_bonferroni, na.rm = TRUE)
+num_bonferroni_genes
+
+
+bonferroni_cutoff <- 0.05 / nrow(res_race_df_erpos)
+bonferroni_cutoff
+
+
+```
+
+```{r}
+
+# Logical vector: TRUE if gene passes both thresholds
+res_race_df_erpos$signif_strict <- (res_race_df_erpos$padj < bonferroni_cutoff) & 
+                             (abs(res_race_df_erpos$log2FoldChange) > 1)
+
+# Number of genes passing both criteria
+sum(res_race_df_erpos$signif_strict)
+
+sig_genes <- subset(res_race_df_erpos, signif_strict == TRUE)
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+# Select top 20 most significant genes for labeling
+top_genes <- head(sig_genes$gene_symbol[order(sig_genes$padj)], 20)
+
+EnhancedVolcano(
+  res_race_df_erpos,
+  lab = res_race_df_erpos$gene_symbol,
+  x = 'log2FoldChange',
+  y = 'padj',
+  pCutoff = bonferroni_cutoff,
+  FCcutoff = 1,
+  selectLab = top_genes,
+  drawConnectors = TRUE,
+  max.overlaps = 16
+)
+
+
+```
+
+```{r}
+
+library(writexl)
+
+# Save res_race_df_aller as Excel
+write_xlsx(res_race_df_erpos, "DEseq with ER positive.xlsx")
+
+```
+
+```{r}
+
+#DEseq for ER-negative samples
+
+#padj in DE is BH or FDR correction by default, NOT Bonferroni correction
+
+# Define formula for regression
+design_formula <- as.formula("~ race")
+
+dds_prot_erneg <- DESeqDataSetFromMatrix(countData = counts_prot_erneg,
+                                colData = pd_prot_erneg, 
+                                design = design_formula)
+  
+# Run DESeq analysis
+dds_prot_erneg_DE <- DESeq(dds_prot_erneg)
+```
+
+```{r}
+
+
+#EA and positive are references 
+
+resultsNames(dds_prot_erneg_DE)
+
+# Perform log fold change shrinkage using apeglm
+res_race_erneg <- lfcShrink(dds_prot_erneg_DE, coef="race_AsA_vs_EA", type="apeglm")
+
+```
+
+```{r}
+
+
+# Remove version numbers from Ensembl IDs
+rownames(res_race_erneg) <- gsub("\\.\\d+$", "", rownames(res_race_erneg))
+
+# Connect to Ensembl
+mart <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+
+annotations <- getBM(
+  attributes = c("ensembl_gene_id", "external_gene_name"),
+  filters = "ensembl_gene_id",
+  values = rownames(res_race_erneg),
+  mart = mart
+)
+annotations <- annotations[!duplicated(annotations$ensembl_gene_id), ]
+
+# Merge annotations
+res_race_df_erneg <- as.data.frame(res_race_erneg)
+res_race_df_erneg$ensembl_gene_id <- rownames(res_race_df_erneg)
+res_race_df_erneg <- merge(res_race_df_erneg, annotations,
+                     by.x = "ensembl_gene_id",
+                     by.y = "ensembl_gene_id",
+                     all.x = TRUE)
+
+# Fallback to Ensembl ID if symbol is missing
+res_race_df_erneg$gene_symbol <- ifelse(is.na(res_race_df_erneg$external_gene_name),
+                                  res_race_df_erneg$ensembl_gene_id,
+                                  res_race_df_erneg$external_gene_name)
+```
+
+```{r}
+
+bonferroni_cutoff <- 0.05 / nrow(res_race_df_erneg)
+res_race_df_erneg$signif_bonferroni <- res_race_df_erneg$padj < bonferroni_cutoff
+
+# Optional: pick top significant genes to label
+top_genes <- head(res_race_df_erneg$gene_symbol[order(res_race_df_erneg$padj)], 20)
+
+# Count the number of genes passing Bonferroni correction
+num_bonferroni_genes <- sum(res_race_df_erneg$signif_bonferroni, na.rm = TRUE)
+num_bonferroni_genes
+
+
+bonferroni_cutoff <- 0.05 / nrow(res_race_df_erneg)
+bonferroni_cutoff
+
+
+```
+
+```{r}
+
+# Logical vector: TRUE if gene passes both thresholds
+res_race_df_erneg$signif_strict <- (res_race_df_erneg$padj < bonferroni_cutoff) & 
+                             (abs(res_race_df_erneg$log2FoldChange) > 1)
+
+# Number of genes passing both criteria
+sum(res_race_df_erneg$signif_strict)
+
+sig_genes <- subset(res_race_df_erneg, signif_strict == TRUE)
+```
+
+```{r}
+
+
+# Select top 20 most significant genes for labeling
+top_genes <- head(sig_genes$gene_symbol[order(sig_genes$padj)], 20)
+
+EnhancedVolcano(
+  res_race_df_erneg,
+  lab = res_race_df_erneg$gene_symbol,
+  x = 'log2FoldChange',
+  y = 'padj',
+  pCutoff = bonferroni_cutoff,
+  FCcutoff = 1,
+  selectLab = top_genes,
+  drawConnectors = TRUE,
+  max.overlaps = 20
+)
+
+```
+
+```{r}
+
+library(writexl)
+
+# Save res_race_df_aller as Excel
+write_xlsx(res_race_df_erneg, "DEseq with ER negative.xlsx")
+
+```
+
+```{r}
+
+# Install if not already installed
+install.packages("openxlsx")
+
+library(openxlsx)
+
+# Create a new workbook
+wb <- createWorkbook()
+
+# Add each results table to a separate worksheet
+addWorksheet(wb, "ER_negative")
+writeData(wb, "ER_negative", res_race_df_erneg)
+
+addWorksheet(wb, "ER_positive")
+writeData(wb, "ER_positive", res_race_df_erpos)
+
+addWorksheet(wb, "All_ER_status")
+writeData(wb, "All_ER_status", res_race_df_aller)
+
+# Save workbook as a single Excel file
+saveWorkbook(wb, "ARC RNAseq DEseq_ER_comparison.xlsx", overwrite = TRUE)
+
+
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).

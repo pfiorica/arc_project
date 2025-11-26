@@ -1,0 +1,173 @@
+---
+title: "ER-Stratification_Check"
+author: "Peter Fiorica"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup}
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(DESeq2))
+suppressPackageStartupMessages(library(gridExtra))
+suppressPackageStartupMessages(library(ggExtra))
+suppressPackageStartupMessages(library(readxl))
+suppressPackageStartupMessages(library(ggrepel))
+suppressPackageStartupMessages(library(DT))
+suppressPackageStartupMessages(library(EnhancedVolcano))
+suppressPackageStartupMessages(library(UpSetR))
+suppressPackageStartupMessages(library(vsn))
+library(ggforce)
+"%&%"=function(a,b) paste(a,b,sep="")
+arc_dir<- "/projects/rpci/songyao/pnfioric/arc_project/"
+tils_dir <- "/projects/rpci/songyao/pnfioric/tils_r01_RNAseq/"
+
+source("/projects/rpci/songyao/pnfioric/MultiEthnic_TILs_GWAS/Tractor/accessory_scripts/plotting.R")
+```
+
+# Introduction
+
+Rabsa sent me an email and slides on 10.2.2023.
+
+> I have been working on the ER status-based stratified DESeq analysis for the ARC RNAseq data to find differentially expressed genes by race. It has been going well, and I have been getting only 12-23 significant genes after increasing the significance threshold to abs(log2foldchange) >2. I have attached a PowerPoint on the analysis for your reference. 
+I was wondering if you have suggestions on how to adjust for the study covariate? I tried adjusting for the covariate and also by dividing the individual components within the study variable, like slides/curls etc. Unfortunately, I keep getting a collinearity error since all these studies only include either EA or AsA samples, thus coinciding with race. Is there anything else I can do to adjust for the study covariate or keep it as is?
+
+# Initial Loading and Filtering
+```{r load data}
+arc_dds <- readRDS(arc_dir %&% "AsA_EA_Samples_GongYao.rds")
+
+gene_info <- fread(tils_dir %&% "mart_export_gene_type.txt", header = T)
+
+til_sample_info <- fread(tils_dir %&% "Phenotype_Sample_Info_wchs_nsbcs_pathways_w_tils_and_origsampetype_pam50_cibersort_iges_danaher_tcr_05092025.txt", header = T)
+
+```
+
+## Filtering
+```{r initial filter}
+
+
+# Filter Counts
+n_samples <- ncol(arc_dds)
+min_samples <- ceiling(0.10 * n_samples)
+keep <- rowSums(counts(arc_dds) >= 5) > min_samples
+arc_dds_filt <- arc_dds[keep, ]
+
+gene_meta <- as.data.table(rowData(arc_dds_filt))
+
+arc_dds_filt <- arc_dds_filt[gene_meta$targeted==TRUE,]
+
+# Stratify_Samples
+arc_dds_erpos <- arc_dds_filt[, colData(arc_dds)$er == "positive"]
+arc_dds_erneg <- arc_dds_filt[, colData(arc_dds)$er == "negative"]
+```
+
+
+Rabsa's filtering:
+
+1) keep only targeted
+2) removed no-ER samples
+3) keep only protein coding
+4) Keep only genes with >5 counts in 10% of samples
+
+# Differential Expression Analysis
+
+## ER-Negative
+```{r run_DE_analysis_EstrogenReceptorNegative}
+arc_counts<- counts(arc_dds_erneg)
+arc_coldata <- colData(arc_dds_erneg)
+arc_coldata_dt <- as.data.table(colData(arc_dds_erneg))
+design_formula <- as.formula("~ race")
+
+dds <- DESeqDataSetFromMatrix(countData = arc_counts,
+                                colData = arc_coldata, 
+                                design = design_formula)
+
+
+dds <- DESeq(dds)
+IV <- resultsNames(dds)[2]
+print("Reporting results for expression related to: " %&% paste(IV) %&% " stratified by ER status")
+res <- results(dds, name = paste(IV))
+
+# Perform log fold change shrinkage using apeglm
+res <- lfcShrink(dds, coef = paste(IV), type = "apeglm")
+# Convert results to data.table
+output <- as.data.table(res@listData)
+output$gene_id <- res@rownames
+
+output <- output %>% left_join(gene_info, by = c("gene_id" = "Gene stable ID version"))
+
+output_ER_Negative <- output %>% arrange(padj)
+
+mod_mat <- model.matrix(design(dds), colData(dds))
+head(mod_mat)
+#mod_mat
+```
+
+## ER-Positive
+
+```{r run_DE_analysis_EstrogenReceptorPositive}
+arc_counts<- counts(arc_dds_erpos)
+arc_coldata <- colData(arc_dds_erpos)
+arc_coldata_dt <- as.data.table(colData(arc_dds_erpos))
+design_formula <- as.formula("~ race")
+
+dds <- DESeqDataSetFromMatrix(countData = arc_counts,
+                                colData = arc_coldata, 
+                                design = design_formula)
+
+
+dds <- DESeq(dds)
+IV <- resultsNames(dds)[2]
+print("Reporting results for expression related to: " %&% paste(IV))
+res <- results(dds, name = paste(IV))
+
+# Perform log fold change shrinkage using apeglm
+res <- lfcShrink(dds, coef = paste(IV), type = "apeglm")
+# Convert results to data.table
+output <- as.data.table(res@listData)
+output$gene_id <- res@rownames
+
+output <- output %>% left_join(gene_info, by = c("gene_id" = "Gene stable ID version"))
+
+output_ER_Positive <- output %>% arrange(padj)
+
+mod_mat <- model.matrix(design(dds), colData(dds))
+head(mod_mat)
+#mod_mat
+```
+
+# Significant Results
+```{r}
+output_ER_Negative_sig <- output_ER_Negative %>%
+  filter(padj < (0.05/nrow(output_ER_Negative)),
+         abs(log2FoldChange) > 2,
+         `Gene type` == "protein_coding")
+print(nrow(output_ER_Negative_sig) %&%" genes meet a thresholf of P (Bonferroni) < 0.05 and abs(log2FC) > 2 in ER-NEGATIVE.")
+
+output_ER_Positive_sig <- output_ER_Positive %>% 
+  filter(padj < (0.05/nrow(output_ER_Positive)),
+         abs(log2FoldChange) > 2,
+         `Gene type` == "protein_coding")
+
+print(nrow(output_ER_Positive_sig) %&%" genes meet a thresholf of P (Bonferroni) < 0.05 and abs(log2FC) > 2 in ER-POSITIVE.")
+```
+
+```{r}
+volcano_plot(output_ER_Negative, threshold = 0.05, hard_threshold = (0.05/nrow(output_ER_Negative)), title = "Differentially Expressed Genes by Race\n(ER_Negative Stratified)", gene_name_col = "Gene name")
+volcano_plot(output_ER_Positive , threshold = 0.05, hard_threshold = (0.05/nrow(output_ER_Positive)), title = "Differentially Expressed Genes by Race\n(ER_Positive Stratified)" , gene_name_col = "Gene name")
+```
+
+# Searching for GOLGA genes in filtering
+
+```{r}
+arc_counts_df<- counts(arc_dds_erpos) %>% as.data.frame()
+GOLGA6L2_name <- "ENSG00000174450.13"
+
+GOLGA6L2_counts <- arc_counts_df[grep(GOLGA6L2_name, rownames(arc_counts_df)), ]
+summary(as.numeric(GOLGA6L2_counts))
+```
+
+1) Pull List of top 100 differentially expressed genes
+2) Pull descriptive summary statistics for each of these:
+3) Plot histogram for each gene.
+3B) Plot heatmap of gene expression counts for each one.
