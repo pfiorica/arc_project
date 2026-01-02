@@ -1,0 +1,26 @@
+---
+title: "04_ssGSEA_ARC"
+author: "Peter Fiorica"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r, echo = FALSE}
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(DESeq2))
+suppressPackageStartupMessages(library(gridExtra))
+suppressPackageStartupMessages(library(ggExtra))
+suppressPackageStartupMessages(library(readxl))
+suppressPackageStartupMessages(library(ggrepel))
+suppressPackageStartupMessages(library(DT))
+suppressPackageStartupMessages(library(EnhancedVolcano))
+suppressPackageStartupMessages(library(UpSetR))
+"%&%"=function(a,b) paste(a,b,sep="")
+
+arc_dir <- "/projects/rpci/songyao/pnfioric/arc_project/"
+tils_dir <- "/projects/rpci/songyao/pnfioric/tils_r01_RNAseq/"
+
+source("/projects/rpci/songyao/pnfioric/MultiEthnic_TILs_GWAS/Tractor/accessory_scripts/plotting.R")
+source(arc_dir %&%"iGES_Utilities.R")
+```

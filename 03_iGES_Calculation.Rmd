@@ -1,0 +1,196 @@
+---
+title: "03_Calculating Immune Gene Expression Signatures"
+author: "Peter Fiorica"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r, echo = FALSE}
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(DESeq2))
+suppressPackageStartupMessages(library(gridExtra))
+suppressPackageStartupMessages(library(ggExtra))
+suppressPackageStartupMessages(library(readxl))
+suppressPackageStartupMessages(library(ggrepel))
+suppressPackageStartupMessages(library(DT))
+suppressPackageStartupMessages(library(EnhancedVolcano))
+suppressPackageStartupMessages(library(UpSetR))
+"%&%"=function(a,b) paste(a,b,sep="")
+
+arc_dir <- "/projects/rpci/songyao/pnfioric/arc_project/"
+tils_dir <- "/projects/rpci/songyao/pnfioric/tils_r01_RNAseq/"
+
+source("/projects/rpci/songyao/pnfioric/MultiEthnic_TILs_GWAS/Tractor/accessory_scripts/plotting.R")
+source(arc_dir %&%"iGES_Utilities.R")
+
+
+```
+
+# Background
+
+This document serves to annotate the process for calculating for the immune gene expression signatures (iGES) for the ARC RNAseq dataset.  For this analysis, 202 immune gene expression signatures will be calculated from Fernandez-Martinez et al. (2023) [1]. Three additional signatures will be calculated from Ayers et al. (2017), Danaher et al (2018), and Conte et al. (2024) [2-4].
+
+# Data Source
+```{r load data}
+# ARC and European Ancestry RNA seq Data
+arc_dds <- readRDS(arc_dir %&% "AsA_EA_Samples_GongYao.rds")
+
+# Biomart information for Gene Annotation
+gene_info <- fread(tils_dir %&% "mart_export_gene_type.txt", header = T)
+ref_data<-fread(tils_dir  %&% "NCBI_Genome_Annotation_Homosapiens_GRCh38_04162024.tsv", header = T)
+
+# Immune Gene Sets
+iGES <-fread(arc_dir %&% "iGES_plus3.txt", nrow =205, fill = T)
+
+# Danager Cell Type Signatures
+danaher_genes <- read_xlsx(arc_dir %&% "JNCI_Danaher_Genes_R_input.xlsx")
+```
+
+### Data Prep
+
+Now we need to prep the RNAseq data for calculation by pulling the TPM information from the DDS object. We also need to clean up the iGES file a little bit too.
+
+```{r data_wrangle}
+# Pull list of genes in iGES
+gene_list <- unique(setdiff(unlist(iGES[, !("V1"), with = FALSE]),iGES$V1))
+ref_data<- ref_data %>% filter(`Gene ID` %in% gene_list,
+                               Name != "uncharacterized gene",
+                               duplicated(`Gene ID`)==FALSE) 
+
+ref_data_dups <- ref_data %>% filter(duplicated(Symbol))
+table(duplicated(ref_data$Symbol))
+
+# Pull Sample Names
+coldata <- as.data.table(colData(arc_dds))
+
+# Pull TPM information
+tpm <- assays(arc_dds)[["TPM"]]
+colnames(tpm) <- coldata$FASTQ_RS
+rownames(tpm) <- sub("\\..*", "", rownames(tpm)) # Remove the version number from the ENSEMBL ID
+
+log2_tpm <- as.data.frame(log2(tpm + 1))
+log2_tpm$gene_id <- rownames(log2_tpm)
+
+# Join to gene info
+log2_tpm_gene_info <- left_join(log2_tpm,
+                                gene_info,
+                                by = c("gene_id"="Gene stable ID")) %>%
+  left_join(ref_data, by = c("Gene name" = "Symbol")) 
+
+###FIGURE OUT DUPLICATES
+log2_tpm_gene_info_no_dups <- normalize_duplicates(log2_tpm_gene_info)
+
+# CLEAN iGES file
+iGES_clean<- clean_iges(iGES)
+```
+
+
+# Functions
+
+The functions that do the heavy lifting of our immune gene expression calculation effectively calculate the median expression of the gene set. For each iGES, there will be 1 to `n` number of genes used to calculate it. The function pulls log2(TPM) for the `n` genes for a given individual and uses the median value of those `n` genes as the iGES score for that gene set.  There are two different functions `sig_score()` and `danaher_cell_signature()` that effectively do the same thing, but take different input formats.
+
+
+# iGES Calculation
+```{r iges_calc}
+signatures_tpm <- sig_score(iGES_clean, log2_tpm_gene_info_no_dups)
+```
+
+### QC Check
+```{r iges_qc, fig.height=10, fig.width=10}
+threshold = 75
+
+ggplot(data = signatures_tpm$coverage,
+  aes(x = reorder(signature, coverage), y = coverage))+
+  geom_col(fill="blue")+
+  geom_hline(yintercept = threshold, color = "red" )+ theme_bw()+ ggtitle("Gene Coverage for All iGES")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+  
+ggplot(data = signatures_tpm$coverage %>% filter(coverage<threshold),
+  aes(x = reorder(signature, coverage), y = coverage))+
+  geom_col(fill="blue")+
+  geom_hline(yintercept = threshold, color = "red" )+ theme_bw()+ ggtitle("Gene Coverage for REMOVED iGES")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+
+iges_pass_filters <- signatures_tpm$coverage %>% filter(coverage> 75) %>% pull(signature)
+
+iges_pass_filter_df <- signatures_tpm$score %>%
+  filter(signature %in% iges_pass_filters) %>%
+  tibble::column_to_rownames(var = "signature")
+
+t_iges_pass_filters <- as.data.frame(t(iges_pass_filter_df))
+```
+
+We can see from the plots above that most of the iGES pass filters (202).
+
+
+# Danaher Gene Sets
+```{r}
+danaher_longer <- danaher_genes %>% separate_rows(`Selected marker genes`, sep = ", ")
+danaher_named <- danaher_longer %>% 
+  left_join(gene_info, by = c("Selected marker genes"="Gene name")) %>%
+  dplyr::rename(gene_id = `Gene stable ID version`) 
+
+danaher_named_filter <- danaher_named %>%
+  filter(`Chromosome/scaffold name` %in% c(1:23, "X")) %>%
+  filter(gene_id != "ENSG00000105501.13")
+
+replacement_key <- data.table(
+  mast_missing = c("ENSG00000197253.14", "ENSG00000172236.19"),
+  replace_mast_missing = c("ENSG00000197253.13", "ENSG00000172236.18")
+)
+
+# Replace gene_id in danaher_named_filter based on the replacement key
+danaher_named_filter <- danaher_named_filter %>%
+  mutate(gene_id = if_else(gene_id %in% replacement_key$mast_missing, 
+                           replacement_key$replace_mast_missing[match(gene_id, replacement_key$mast_missing)], 
+                           gene_id))
+```
+
+
+```{r calculate_danaher}
+# Pull TPM information
+tpm <- assays(arc_dds)[["TPM"]]
+colnames(tpm) <- coldata$FASTQ_RS
+
+log2_tpm <- as.data.frame(log2(tpm + 1))
+
+output <- danaher_cell_signature(danaher_named_filter, log2_tpm)
+danaher_scores <- output$score
+```
+
+### Danaher QC
+```{r danaher QC}
+threshold = 75
+
+ggplot(data = output$coverage,
+  aes(x = reorder(cell_type, coverage), y = coverage))+
+  geom_col(fill="blue")+
+  geom_hline(yintercept = threshold, color = "red" )+ theme_bw()+ ggtitle("Gene Coverage for Danaher Scores")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+t_danaher <- t(danaher_scores)
+colnames(t_danaher) <- c(paste0(colnames(t_danaher), "_Danaher"))
+```
+
+
+# Combine Output
+```{r}
+t_danaher <- t_danaher %>% as.data.frame %>% rownames_to_column(var = "RS_ID")
+t_iges_pass_filters <- t_iges_pass_filters %>% as.data.frame %>%  rownames_to_column(var = "RS_ID")
+
+t_total <- left_join(t_danaher, t_iges_pass_filters, by = "RS_ID")
+
+write_rds(t_total, arc_dir %&% "AsA_EA_Samples_iGES_Danaher.rds")
+```
+
+
+# References:
+
+[1] Fernandez-Martinez A, Pascual T, Singh B, Nuciforo P, Rashid NU, Ballman KV, Campbell JD, Hoadley KA, Spears PA, Pare L, Brasó-Maristany F, Chic N, Krop I, Partridge A, Cortés J, Llombart-Cussac A, Prat A, Perou CM, Carey LA. Prognostic and Predictive Value of Immune-Related Gene Expression Signatures vs Tumor-Infiltrating Lymphocytes in Early-Stage ERBB2/HER2-Positive Breast Cancer: A Correlative Analysis of the CALGB 40601 and PAMELA Trials. JAMA Oncol. 2023 Apr 1;9(4):490-499. doi: 10.1001/jamaoncol.2022.6288. PMID: 36602784; PMCID: PMC9857319.
+
+[2] Ayers M, Lunceford J, Nebozhyn M, Murphy E, Loboda A, Kaufman DR, Albright A, Cheng JD, Kang SP, Shankaran V, Piha-Paul SA, Yearley J, Seiwert TY, Ribas A, McClanahan TK. IFN-γ-related mRNA profile predicts clinical response to PD-1 blockade. J Clin Invest. 2017 Aug 1;127(8):2930-2940. doi: 10.1172/JCI91190. Epub 2017 Jun 26. PMID: 28650338; PMCID: PMC5531419.
+
+[3] Danaher P, Warren S, Lu R, Samayoa J, Sullivan A, Pekker I, Wallden B, Marincola FM, Cesano A. Pan-cancer adaptive immune resistance as defined by the Tumor Inflammation Signature (TIS): results from The Cancer Genome Atlas (TCGA). J Immunother Cancer. 2018 Jun 22;6(1):63. doi: 10.1186/s40425-018-0367-1. PMID: 29929551; PMCID: PMC6013904.
+
+[4] Conte B, Brasó-Maristany F, Hernández AR, Pascual T, Villacampa G, Schettini F, Vidal Losada MJ, Seguí E, Angelats L, Garcia-Fructuoso I, Gómez-Bravo R, Lorman-Carbó N, Paré L, Marín-Aguilera M, Martínez-Sáez O, Adamo B, Sanfeliu E, Fratini B, Falato C, Chic N, Vivancos A, Villagrasa P, Staaf J, Parker JS, Perou CM, Prat A. A 14-gene B-cell immune signature in early-stage triple-negative breast cancer (TNBC): a pooled analysis of seven studies. EBioMedicine. 2024 Apr;102:105043. doi: 10.1016/j.ebiom.2024.105043. Epub 2024 Mar 5. PMID: 38447275; PMCID: PMC10924177.
