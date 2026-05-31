@@ -1,0 +1,65 @@
+---
+definitions:
+  command: "/projects/rpci/songyao/pnfioric/software/mixcr_new/mixcr"
+  template: mixcr.jinja
+  default_arguments:
+    job_memory: "16"
+    job_walltime: "23:59:00"
+    logs_folder: logs_mixcr
+    n_cpu: "12"
+    nodes: "1"
+    ntasks: "1"
+    task1: "analyze"
+    preset: "rna-seq"
+    species: "hsa"
+  
+
+  submission:
+    !SLURMQueue
+      jobs_folder: jobs_mixcr
+      job_name_key: job_name
+      fake_submission: true
+
+  constants:
+    file_folder: &FILE_FOLDER /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/fastq_files
+    results_folder: &RESULTS_FOLDER /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results
+
+  pre_command:
+    - '[ -d results ] || mkdir -p results'
+
+arguments:
+    - !FilesInFolder
+      name: sample
+      folder: *FILE_FOLDER
+      sort: true
+      regexp_filter:  "(RS-\\d+)"
+      metadata_rules:
+        - !ExtractFromFileNameRegexpMetadata { path: sample_id }
+ 
+    - !ArgumentFromMetadata 
+      name: input_r1
+      prepend: *FILE_FOLDER
+      format_rule: "{sample_id}/*{sample_id}*_R1_*.fastq.gz"
+      sources:
+        - { path: sample_id, destination: sample_id }
+
+    - !ArgumentFromMetadata 
+      name: input_r2
+      prepend: *FILE_FOLDER
+      format_rule: "{sample_id}/*{sample_id}*_R2_*.fastq.gz"
+      sources:
+        - { path: sample_id, destination: sample_id }
+ 
+    - !ArgumentFromMetadata
+      name: output
+      prepend: *RESULTS_FOLDER
+      format_rule: "mixcr_{sample_id}"
+      sources: 
+        - { path: sample_id, destination: sample_id }
+
+    - !ArgumentFromMetadata
+      name: "job_name"
+      format_rule: "{sample_id}_mixcr"
+      sources:
+        - { path: sample_id, destination: sample_id }
+

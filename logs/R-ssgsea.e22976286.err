@@ -1,0 +1,7 @@
+Warning message:
+The `category` argument of `msigdbr()` is deprecated as of msigdbr 10.0.0.
+ℹ Please use the `collection` argument instead. 
+Warning message:
+In .filterFeatures(expr, method) :
+  629 genes with constant expression values throuhgout the samples.
+x being coerced from class: matrix to data.table

@@ -1,0 +1,211 @@
+WARNING: sun.reflect.Reflection.getCallerClass is not supported. This will impact performance.
+
+>>>>>>>>>>>>>>>>>>>>>>> mixcr align <<<<<<<<<<<<<<<<<<<<<<<
+Running:
+mixcr align --report /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.align.report.txt --json-report /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.align.report.json --threads 12 --preset rna-seq --save-output-file-names /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.align.list.tsv --species hsa /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/fastq_files/RS-04430810/RS-04430810_SFOS09014000-A1_RS-03702963_S22_R1_001.fastq.gz /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/fastq_files/RS-04430810/RS-04430810_SFOS09014000-A1_RS-03702963_S22_R2_001.fastq.gz /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.alignments.vdjca
+Alignment: 0%
+Alignment: 4.3%  ETA: 00:45:03
+Alignment: 8.6%  ETA: 00:42:10
+Alignment: 12.9%  ETA: 00:40:35
+Alignment: 17.2%  ETA: 00:38:11
+Alignment: 21.5%  ETA: 00:36:34
+Alignment: 25.8%  ETA: 00:34:13
+Alignment: 30.2%  ETA: 00:31:53
+Alignment: 34.6%  ETA: 00:29:35
+Alignment: 39%  ETA: 00:27:52
+Alignment: 43.5%  ETA: 00:25:05
+Alignment: 48%  ETA: 00:23:19
+Alignment: 52.5%  ETA: 00:21:06
+Alignment: 56.8%  ETA: 00:19:55
+Alignment: 61.2%  ETA: 00:17:32
+Alignment: 65.6%  ETA: 00:15:42
+Alignment: 70.1%  ETA: 00:13:25
+Alignment: 74.5%  ETA: 00:11:40
+Alignment: 78.9%  ETA: 00:09:33
+Alignment: 83.4%  ETA: 00:07:23
+Alignment: 87.9%  ETA: 00:05:23
+Alignment: 92.3%  ETA: 00:03:26
+Alignment: 96.8%  ETA: 00:01:24
+====================== report: align ======================
+Analysis time: 45.45m
+Total sequencing reads: 43705308
+Successfully aligned reads: 2519 (0.01%)
+Coverage (percent of successfully aligned):
+  CDR3: 437 (17.35%)
+  FR3_TO_FR4: 0 (0%)
+  CDR2_TO_FR4: 0 (0%)
+  FR2_TO_FR4: 0 (0%)
+  CDR1_TO_FR4: 0 (0%)
+  VDJRegion: 1 (0.04%)
+Alignment failed: no hits (not TCR/IG?): 42599234 (97.47%)
+Alignment failed after alignment-aided overlap: 1 (0%)
+Alignment failed: no CDR3 parts: 15803 (0.04%)
+Alignment failed: low total score: 1087751 (2.49%)
+Overlapped: 39011707 (89.26%)
+Overlapped and aligned: 2303 (0.01%)
+Overlapped and not aligned: 39009404 (89.26%)
+Alignment-aided overlaps, percent of overlapped and aligned: 30 (1.3%)
+No CDR3 parts alignments, percent of successfully aligned: 43 (1.71%)
+Partial aligned reads, percent of successfully aligned: 2039 (80.94%)
+J gene chimeras: 8 (0%)
+Realigned with forced non-floating bound: 9387262 (21.48%)
+Realigned with forced non-floating right bound in left read: 487 (0%)
+Realigned with forced non-floating left bound in right read: 487 (0%)
+TRA chains: 558 (22.15%)
+TRA non-functional: 6 (1.08%)
+TRB chains: 172 (6.83%)
+TRB non-functional: 0 (0%)
+TRD chains: 5 (0.2%)
+TRD non-functional: 0 (0%)
+TRG chains: 25 (0.99%)
+TRG non-functional: 2 (8%)
+IGH chains: 678 (26.92%)
+IGH non-functional: 3 (0.44%)
+TRAD chains: 10 (0.4%)
+TRAD non-functional: 0 (0%)
+IGK chains: 438 (17.39%)
+IGK non-functional: 3 (0.68%)
+IGL chains: 633 (25.13%)
+IGL non-functional: 1 (0.16%)
+Trimming report:
+  R1 reads trimmed left: 13360 (0.03%)
+  R1 reads trimmed right: 12728 (0.03%)
+  Average R1 nucleotides trimmed left: 0.004856069198734396
+  Average R1 nucleotides trimmed right: 0.0051483449104168305
+  R2 reads trimmed left: 12505 (0.03%)
+  R2 reads trimmed right: 12479 (0.03%)
+  Average R2 nucleotides trimmed left: 0.004914711961302275
+  Average R2 nucleotides trimmed right: 0.005053459410467946
+
+>>>>>>>>>>>>>>>>>> mixcr assemblePartial <<<<<<<<<<<<<<<<<<
+Running:
+mixcr assemblePartial --report /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.assemblePartial.report.txt --json-report /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.assemblePartial.report.json /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.alignments.vdjca /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.passembled.1.vdjca
+Building index: 0%
+Searching for overlaps: 0%
+================= report: assemblePartial =================
+Analysis time: 289ms
+Total alignments analysed: 2519
+Number of output alignments: 2503 (99.36%)
+Alignments already with CDR3 (no overlapping is performed): 455 (18.06%)
+Successfully overlapped alignments: 16 (0.64%)
+Left parts with too small N-region (failed to extract k-mer): 366 (14.53%)
+Extracted k-mer diversity: 2345
+Dropped due to wildcard in k-mer: 0 (0%)
+Dropped due to too short NRegion parts in overlap: 6 (0.24%)
+Dropped overlaps with empty N region due to no complete NDN coverage: 0 (0%)
+Number of left-side alignments: 327 (12.98%)
+Number of right-side alignments: 1379 (54.74%)
+Complex overlaps: 0 (0%)
+Over-overlaps: 0 (0%)
+Partial alignments written to output: 2032 (80.67%)
+
+>>>>>>>>>>>>>>>>>> mixcr assemblePartial <<<<<<<<<<<<<<<<<<
+Running:
+mixcr assemblePartial --report /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.assemblePartial.report.txt --json-report /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.assemblePartial.report.json /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.passembled.1.vdjca /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.passembled.2.vdjca
+Building index: 0%
+Searching for overlaps: 0.1%
+================= report: assemblePartial =================
+Analysis time: 108ms
+Total alignments analysed: 2503
+Number of output alignments: 2503 (100%)
+Alignments already with CDR3 (no overlapping is performed): 471 (18.82%)
+Successfully overlapped alignments: 0 (0%)
+Left parts with too small N-region (failed to extract k-mer): 366 (14.62%)
+Extracted k-mer diversity: 2295
+Dropped due to wildcard in k-mer: 0 (0%)
+Dropped due to too short NRegion parts in overlap: 6 (0.24%)
+Dropped overlaps with empty N region due to no complete NDN coverage: 0 (0%)
+Number of left-side alignments: 311 (12.43%)
+Number of right-side alignments: 1363 (54.45%)
+Complex overlaps: 0 (0%)
+Over-overlaps: 0 (0%)
+Partial alignments written to output: 2032 (81.18%)
+
+>>>>>>>>>>>>>>>>>>>>>>> mixcr extend <<<<<<<<<<<<<<<<<<<<<<<
+Running:
+mixcr extend --report /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.extend.report.txt --json-report /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.extend.report.json --threads 12 /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.passembled.2.vdjca /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.extended.vdjca
+Extending alignments: 0%
+====================== report: extend ======================
+Analysis time: 28ms
+Extended alignments count: 0 (0%)
+V extensions total: 0 (0%)
+V extensions with merged targets: 0 (0%)
+J extensions total: 0 (0%)
+J extensions with merged targets: 0 (0%)
+V+J extensions: 0 (0%)
+Mean V extension length: NaN
+Mean J extension length: NaN
+
+>>>>>>>>>>>>>>>>>>>>>> mixcr assemble <<<<<<<<<<<<<<<<<<<<<<
+Running:
+mixcr assemble --report /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.assemble.report.txt --json-report /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.assemble.report.json /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.extended.vdjca /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.clna
+Initialization: progress unknown
+Initialization: progress unknown
+===================== report: assemble =====================
+Analysis time: 544ms
+Final clonotype count: 148
+Reads used in clonotypes, percent of total: 439 (0%)
+Average number of reads per clonotype: 2.97
+Reads dropped due to the lack of a clone sequence, percent of total: 2060 (0%)
+Reads dropped due to a too short clonal sequence, percent of total: 0 (0%)
+Reads dropped due to low quality, percent of total: 0 (0%)
+Reads dropped due to failed mapping, percent of total: 19 (0%)
+Reads dropped with low quality clones, percent of total: 0 (0%)
+Aligned reads processed: 459
+Reads used in clonotypes before clustering, percent of total: 440 (0%)
+Number of reads used as a core, percent of used: 433 (98.41%)
+Mapped low quality reads, percent of used: 7 (1.59%)
+Reads clustered in PCR error correction, percent of used: 1 (0.23%)
+Reads pre-clustered due to the similar VJC-lists, percent of used: 0 (0%)
+Clonotypes dropped as low quality: 0
+Clonotypes eliminated by PCR error correction: 1
+Clonotypes pre-clustered due to the similar VJC-lists: 0
+Clones dropped in post filtering: 0 (0%)
+Reads dropped in post filtering: 0.0 (0%)
+Reads filtered by tag prefix: 0 (0%)
+TRA chains: 5 (3.38%)
+TRA non-functional: 2 (40%)
+TRB chains: 2 (1.35%)
+TRB non-functional: 0 (0%)
+TRG chains: 3 (2.03%)
+TRG non-functional: 2 (66.67%)
+IGH chains: 42 (28.38%)
+IGH non-functional: 1 (2.38%)
+IGK chains: 61 (41.22%)
+IGK non-functional: 3 (4.92%)
+IGL chains: 35 (23.65%)
+IGL non-functional: 0 (0%)
+
+>>>>>>>>>>>>>>>>>> mixcr assembleContigs <<<<<<<<<<<<<<<<<<
+Running:
+mixcr assembleContigs --report /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.assembleContigs.report.txt --json-report /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.assembleContigs.report.json --threads 12 /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.clna /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.contigs.clns
+Assembling contigs: 0%
+================= report: assembleContigs =================
+Analysis time: 242ms
+Initial clonotype count: 148
+Final clonotype count: 148 (100%)
+Canceled assemblies: 0 (0%)
+Clones filtered out after assemble: 0 (0%)
+Number of premature termination assembly events, percent of number of initial clonotypes: 0.0 (0%)
+Longest contig length: 313
+Clustered variants: 0 (0%)
+Reads in clustered variants: 0.0 (0%)
+Reads in divided (newly created) clones: 0.0 (0%)
+Clones with ambiguous letters in splitting region: 0 (0%)
+Reads in clones with ambiguous letters in splitting region: 0.0 (0%)
+Average number of ambiguous letters per clone with ambiguous letters in splitting region: NaN
+Clones combined after clustering: 0 (0%)
+
+>>>>>>>>>>>>>>>>>>>>>>>>> mixcr qc <<<<<<<<<<<<<<<<<<<<<<<<<
+Running:
+mixcr qc --print-to-stdout /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.contigs.clns /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.qc.txt /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.qc.json
+
+  Alignments dropped due to low sequence quality: 0.0% [OK]
+
+>>>>>>>>>>>>>>>>>>>> mixcr exportClones <<<<<<<<<<<<<<<<<<<<
+Running:
+mixcr exportClones /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.contigs.clns /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results/mixcr_RS-04430810.clones.tsv
+Analysis finished successfully.
+===============================
+Visualize results and simplify your immune data analysis with a convenient UI.
+Explore and install Platforma.bio here: https://platforma.bio

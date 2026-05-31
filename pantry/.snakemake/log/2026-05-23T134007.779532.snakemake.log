@@ -1,0 +1,116 @@
+Building DAG of jobs...
+Using shell: /cvmfs/soft.ccr.buffalo.edu/versions/2023.01/compat/bin/bash
+Provided cluster nodes: 950
+Job stats:
+job                              count    min threads    max threads
+-----------------------------  -------  -------------  -------------
+all                                  1              1              1
+alt_TSS_polyA_kallisto            3456             16             16
+alt_TSS_polyA_kallisto_index         4              1              1
+alt_TSS_polyA_pheno_groups           2              1              1
+alt_TSS_polyA_transcript_seqs        4              1              1
+assemble_alt_TSS_polyA_bed           2              1              1
+assemble_expression_bed              1              1              1
+assemble_splicing_bed                1              1              1
+assemble_stability_bed               1              1              1
+cluster_junctions                    1              1              1
+exons_introns_from_GTF               1              1              1
+extract_cdna                         1              1              1
+index_bam                          864              8              8
+index_bed                            6              1              1
+isoforms_pheno_groups                1              1              1
+kallisto                           864             16             16
+kallisto_index                       1              1              1
+normalize_alt_TSS_polyA              2              1              1
+normalize_expression                 1              1              1
+normalize_isoforms                   1              1              1
+normalize_splicing                   1              1              1
+normalize_stability                  1              1              1
+regtools_junctions                 864              1              1
+run_featureCounts                 1728              8              8
+shrink_bam                         864              1              1
+splicing_pheno_groups                1              1              1
+star_align                         864             16             16
+star_index                           1             16             16
+txrevise_construct_events          100              1              1
+txrevise_extract_tags                1              1              1
+txrevise_merge_gff_files             4              1              1
+txrevise_prepare_annotations         1              1              1
+total                             9645              1             16
+
+Select jobs to execute...
+
+[Sat May 23 13:40:20 2026]
+localrule extract_cdna:
+    input: /projects/rpci/shared/references/UCSC_hg38/hg38.fa, /projects/rpci/songyao/pnfioric/tils_r01_RNAseq/reference/gencode.v44.fixed.withsource.gtf
+    output: /vscratch/grp-songyao/pnfioric/pantry/intermediate/reference/cDNA.fa.gz
+    jobid: 3583
+    reason: Missing output files: /vscratch/grp-songyao/pnfioric/pantry/intermediate/reference/cDNA.fa.gz
+    resources: mem_mb=9878, disk_mb=9878, tmpdir=/tmp
+
+
+[Sat May 23 13:40:20 2026]
+rule star_index:
+    input: /projects/rpci/shared/references/UCSC_hg38/hg38.fa, /projects/rpci/songyao/pnfioric/tils_r01_RNAseq/reference/gencode.v44.fixed.withsource.gtf
+    output: /vscratch/grp-songyao/pnfioric/pantry/intermediate/reference/star_index_150/SAindex, /vscratch/grp-songyao/pnfioric/pantry/intermediate/reference/star_index_150/chrNameLength.txt
+    jobid: 4457
+    reason: Missing output files: /vscratch/grp-songyao/pnfioric/pantry/intermediate/reference/star_index_150/SAindex
+    threads: 16
+    resources: mem_mb=60000, disk_mb=9878, tmpdir=<TBD>, runtime=04:00:00, slurm_extra=--qos=general-compute
+
+Submitted job 4457 with external jobid 'Submitted batch job 24672939'.
+
+[Sat May 23 13:40:20 2026]
+rule exons_introns_from_GTF:
+    input: /projects/rpci/songyao/pnfioric/tils_r01_RNAseq/reference/gencode.v44.fixed.withsource.gtf
+    output: /vscratch/grp-songyao/pnfioric/pantry/intermediate/reference/constit_exons.gtf, /vscratch/grp-songyao/pnfioric/pantry/intermediate/reference/introns.gtf
+    jobid: 7916
+    reason: Missing output files: /vscratch/grp-songyao/pnfioric/pantry/intermediate/reference/introns.gtf, /vscratch/grp-songyao/pnfioric/pantry/intermediate/reference/constit_exons.gtf
+    resources: mem_mb=16000, disk_mb=3460, tmpdir=<TBD>, runtime=19:00:00, slurm_extra=--qos=general-compute
+
+Submitted job 7916 with external jobid 'Submitted batch job 24672940'.
+
+[Sat May 23 13:40:20 2026]
+rule txrevise_extract_tags:
+    input: /projects/rpci/songyao/pnfioric/tils_r01_RNAseq/reference/gencode.v44.fixed.withsource.gtf
+    output: /vscratch/grp-songyao/pnfioric/pantry/intermediate/reference/txrevise/transcript_tags.txt
+    jobid: 9
+    reason: Missing output files: /vscratch/grp-songyao/pnfioric/pantry/intermediate/reference/txrevise/transcript_tags.txt
+    resources: mem_mb=60000, disk_mb=3460, tmpdir=<TBD>, runtime=120, slurm_extra=--qos=general-compute
+
+Submitted job 9 with external jobid 'Submitted batch job 24672941'.
+[Sat May 23 13:42:00 2026]
+Error in rule exons_introns_from_GTF:
+    jobid: 7916
+    input: /projects/rpci/songyao/pnfioric/tils_r01_RNAseq/reference/gencode.v44.fixed.withsource.gtf
+    output: /vscratch/grp-songyao/pnfioric/pantry/intermediate/reference/constit_exons.gtf, /vscratch/grp-songyao/pnfioric/pantry/intermediate/reference/introns.gtf
+    shell:
+        
+        sh scripts/exons_introns_from_gtf.sh             /projects/rpci/songyao/pnfioric/tils_r01_RNAseq/reference/gencode.v44.fixed.withsource.gtf             /vscratch/grp-songyao/pnfioric/pantry/intermediate/reference/constit_exons.gtf             /vscratch/grp-songyao/pnfioric/pantry/intermediate/reference/introns.gtf
+        
+        (one of the commands exited with non-zero exit code; note that snakemake uses bash strict mode!)
+    cluster_jobid: Submitted batch job 24672940
+
+Error executing rule exons_introns_from_GTF on cluster (jobid: 7916, external: Submitted batch job 24672940, jobscript: /projects/rpci/songyao/pnfioric/arc_project/pantry/.snakemake/tmp.f3bxfmyw/snakejob.exons_introns_from_GTF.7916.sh). For error details see the cluster log and the log files of the involved rule(s).
+[Sat May 23 13:42:00 2026]
+Error in rule txrevise_extract_tags:
+    jobid: 9
+    input: /projects/rpci/songyao/pnfioric/tils_r01_RNAseq/reference/gencode.v44.fixed.withsource.gtf
+    output: /vscratch/grp-songyao/pnfioric/pantry/intermediate/reference/txrevise/transcript_tags.txt
+    shell:
+        
+        python3 scripts/txrevise/extractTranscriptTags.py             --gtf <(gzip -c /projects/rpci/songyao/pnfioric/tils_r01_RNAseq/reference/gencode.v44.fixed.withsource.gtf)             > /vscratch/grp-songyao/pnfioric/pantry/intermediate/reference/txrevise/transcript_tags.txt
+        
+        (one of the commands exited with non-zero exit code; note that snakemake uses bash strict mode!)
+    cluster_jobid: Submitted batch job 24672941
+
+Error executing rule txrevise_extract_tags on cluster (jobid: 9, external: Submitted batch job 24672941, jobscript: /projects/rpci/songyao/pnfioric/arc_project/pantry/.snakemake/tmp.f3bxfmyw/snakejob.txrevise_extract_tags.9.sh). For error details see the cluster log and the log files of the involved rule(s).
+[Sat May 23 13:42:09 2026]
+Finished job 3583.
+1 of 9645 steps (0.0%) done
+[Sat May 23 14:12:32 2026]
+Finished job 4457.
+2 of 9645 steps (0.0%) done
+Shutting down, this might take some time.
+Exiting because a job execution failed. Look above for error message
+Complete log: .snakemake/log/2026-05-23T134007.779532.snakemake.log

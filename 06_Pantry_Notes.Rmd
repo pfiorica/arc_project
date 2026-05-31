@@ -1,0 +1,134 @@
+---
+title: "06_ARC_Pantry"
+author: "Peter Fiorica"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Introduction
+
+Previously, I have used the [Pantry software](https://github.com/PejLab/Pantry) for analysis of the African ancestry breast tumor RNAseq data. This analysis can be found at `/projects/rpci/songyao/pnfioric/software/Pantry/phenotyping` along with notes at `/projects/rpci/songyao/pnfioric/pantry_rnaseq_PNW/`.
+
+Briefly, Pantry is a software that helps us calculate different RNA modalities for each sample. These modalities are:
+
+-   Expression
+
+-   Splicing
+
+-   Isoform Usage
+
+-   Alternative Poly-adenylation
+
+-   Alternative Transcription start sites
+
+-   RNA Stability
+
+# Setup
+
+Setting up Pantry takes some preparation in advance. The details for installing Pantry are well-characterized in their github and my other notes, so I will talk about the set up after installation.
+
+*Sample map*: We need to make a sample map file for our data that includes a list or relative directory of all the fastq files we will be processing. Luckily, we are performing this analysis after the AIRR analysis, so we have already put the fastq files as symbolic links in one large directory.  The map file should look like:
+
+```
+RS-02166929/RS-04417164_S13-2454-2_RS-02166929_S143_R1_001.fastq.gz     RS-02166929/RS-04417164_S13-2454-2_RS-02166929_S143_R2_001.fastq.gz     RS-02166929
+RS-02732377/RS-04417228_S08-5477-1E_RS-02732377_S192_R1_001.fastq.gz    RS-02732377/RS-04417228_S08-5477-1E_RS-02732377_S192_R2_001.fastq.gz    RS-02732377
+RS-03423261/RS-04417092_4-S16-03281-2E_RS-03423261_S96_R1_001.fastq.gz  RS-03423261/RS-04417092_4-S16-03281-2E_RS-03423261_S96_R2_001.fastq.gz  RS-03423261
+```
+
+To make this file we can simply run `python 01_make_sample_file.py`. 
+
+*Sample list*: Now we want to specify what samples we will be using in our analysis. For this, we can just extract the entire third column.
+
+*Configuration file*: Since Pantry runs as a snakemake pipeline, we will need a configuration file to orient ourselves for this. In the initial download of the Pantry test data, there is a `config.yml` file that we will be basing our analysis on. There are a few tweaks we want to make to this shown below:
+
+```
+paired_end: True
+read_length: 150
+fastq_dir: /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/fastq_files/
+#fastq_dir: /projects/rpci/songyao/pnfioric/tils_r01_RNAseq/fastq_files/
+fastq_map: /projects/rpci/songyao/pnfioric/arc_project/fastq_list.txt
+
+intermediate_dir: /vscratch/grp-songyao/pnfioric/pantry/intermediate
+intermediate_ref_dir: /vscratch/grp-songyao/pnfioric/pantry/intermediate/reference
+```
+
+*Snakefile*: The Snakefile is what actually orients our jobs and steps for our analysis.
+
+# Dry-run
+
+```
+snakemake -j1 -n
+```
+
+The outline looks like 9645 jobs will be prepared to run:
+
+```
+job                              count    min threads    max threads
+-----------------------------  -------  -------------  -------------
+all                                  1              1              1
+alt_TSS_polyA_kallisto            3456              1              1
+alt_TSS_polyA_kallisto_index         4              1              1
+alt_TSS_polyA_pheno_groups           2              1              1
+alt_TSS_polyA_transcript_seqs        4              1              1
+assemble_alt_TSS_polyA_bed           2              1              1
+assemble_expression_bed              1              1              1
+assemble_splicing_bed                1              1              1
+assemble_stability_bed               1              1              1
+cluster_junctions                    1              1              1
+exons_introns_from_GTF               1              1              1
+extract_cdna                         1              1              1
+index_bam                          864              1              1
+index_bed                            6              1              1
+isoforms_pheno_groups                1              1              1
+kallisto                           864              1              1
+kallisto_index                       1              1              1
+normalize_alt_TSS_polyA              2              1              1
+normalize_expression                 1              1              1
+normalize_isoforms                   1              1              1
+normalize_splicing                   1              1              1
+normalize_stability                  1              1              1
+regtools_junctions                 864              1              1
+run_featureCounts                 1728              1              1
+shrink_bam                         864              1              1
+splicing_pheno_groups                1              1              1
+star_align                         864              1              1
+star_index                           1              1              1
+txrevise_construct_events          100              1              1
+txrevise_extract_tags                1              1              1
+txrevise_merge_gff_files             4              1              1
+txrevise_prepare_annotations         1              1              1
+total                             9645              1              1
+```
+
+# True Run:
+
+Before we run, it is helpful to check the available storage in the scratch. The scratch is where we will be storing the intermediated data for this analysis, and quite a bit of this data is make. 
+```
+df -h /vscratch/grp-songyao/pnfioric/
+Filesystem                              Size  Used Avail Use% Mounted on
+nfs.vast-vtc.ccr.buffalo.edu:/vscratch  9.1T  456G  8.7T   5% /vscratch
+```
+
+8.7TB should be enough but we can see how this develops...
+
+
+### Running the analysis
+
+```
+nohup bash 02_run_snakemake_full.sh > 01_ARC_Pantry_log.out
+```
+
+
+I am getting another txrevise error:
+
+```
+Error executing rule txrevise_construct_events on cluster (jobid: 73, external: Submitted batch job 24679513, jobscript: /projects/rpci/songyao/pnfioric/software/Pantry/phenotyping/.snakemake/tmp.9u85368l/snakejob.txrevise_construct_events.73.sh). For error details see the cluster log and the log files of the involved rule(s).
+ERROR:snakemake.logging:Error executing rule txrevise_construct_events on cluster (jobid: 73, external: Submitted batch job 24679513, jobscript: /projects/rpci/songyao/pnfioric/software/Pantry/phenotyping/.snakemake/tmp.9u85368l/snakejob.txrevise_construct_events.73.sh). For error details see the cluster log and the log files of the involved rule(s).
+```
+
+I edited line 29 of the `constructEvents.R` script for tx_revise since it appears there was a package dependency issue...
+
+```
+nohup bash 02_run_snakemake_full.sh > 02_ARC_Pantry_log_txrevise.out
+
+```

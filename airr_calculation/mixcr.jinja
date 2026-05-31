@@ -1,0 +1,22 @@
+#!/bin/bash
+#SBATCH --job-name={{ job_name }}
+#SBATCH --output={{logs_folder}}/%x.o.%j.log
+#SBATCH --error={{logs_folder}}/%x.e%j.err
+#SBATCH --time={{job_walltime}}
+#SBATCH --partition=general-compute --qos=general-compute
+#SBATCH --nodes={{ nodes }}
+#SBATCH --ntasks={{ ntasks }}
+#SBATCH --cpus-per-task={{ n_cpu }}
+#SBATCH --mem={{job_memory}}000
+
+# module load gcc foss java samtools r-bundle-bioconductor
+cd $SLURM_SUBMIT_DIR 
+
+module load gcc foss java
+
+{{ setup }}
+
+{{ command }} {{ task1 }} {{ preset }} --species {{ species }} --threads {{ n_cpu }} -Xmx{{job_memory}}g \
+    {{ input_r1 }} \
+    {{ input_r2 }} \
+    {{ output }}

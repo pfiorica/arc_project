@@ -1,0 +1,623 @@
+---
+title: "Processing ARC AIRR"
+author: "Peter Fiorica"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+# Introduction
+
+As part of the ARC Project, I was asked to calculate adaptive immune receptor repertoire signatures. The plan is to use MiXCR as I did for the TILS project to calculate adaptive immune receptor repertoire information. The details of how I did this in the past can be found at `/projects/rpci/songyao/pnfioric/tils_r01_RNAseq/tcr_quant/00_MiXCR_Introduction.Rmd`.
+
+Similar to last time, we will be using the software [badger](https://github.com/hakyimlab/badger) to call submit the MiXCR job in an HPC environment since we have 1000+ samples. The samples are store in the directories below. The plan will be to harmonize these paths with symbolic links to be able to call all of these jobs with badger.
+
+```
+#RQ-026109 plates 1-4
+/projects/rpci/songliu/liyan/LiYan/RQ-026109_1to4/RQ026109-Yao/
+#192 Samples
+
+#RQ-026109 plates 5-8
+#/projects/rpci/zhihongg/CapRun/RQ026109_Yao/ # This was replaced by the directory below...
+/projects/rpci/songliu/liyan/LiYan/RQ-026109_5to8/RQ026109_Yao/
+# 192 Samples
+#RQ-026110 plates 9-12
+/projects/rpci/songliu/liyan/LiYan/RQ-026110-Yao/
+# 192 Samples
+#RQ-026110 plates 13-16
+/projects/rpci/songliu/liyan/LiYan/RQ-026110_13to16/RQ026110-Yao/
+#192 Samples
+#RQ-026111 plates 17-18
+/projects/rpci/songliu/liyan/LiYan/RQ026111/RQ026111-Yao/
+#96 Samples
+```
+
+# Harmonizing File Paths
+
+```
+bash harmonize_symbolic_links.sh
+```
+
+# Badger Files
+
+Badger uses `.yaml` and `.jinja` job templates to submit jobs. In our situation, we will have to edit the previous files to submit these jobs, but hopefully only the `.yaml` file will need to be edited. We are commenting out the `#fake_submission: true` piece, so the jobs will not be submitted immediately after they are generated. Since we are generating >1000 jobs, this would stall the CCR queue, so instead will be using a simple script to submit the jobs at regularly spaced intervals.
+
+Files with the FASTQ files are named as such:
+
+```
+RS-04367378_VALS11004032-A5_RS-03837571_S44_R1_001.fastq.gz
+RS-04367378_VALS11004032-A5_RS-03837571_S44_R2_001.fastq.gz
+```
+
+In these, the first RS_ID (RS-04367378) corresponds to the ARC coldata, so we will be abstracting that from the file name.. Our code is set up to run this way in the badger `call_mixcr.yaml`
+
+We can run this with 
+
+```
+python /projects/rpci/songyao/pnfioric/software/badger/src/badger.py -yaml_configuration_file /projects/rpci/songyao/pnfioric/arc_project/airr_calculation/call_mixcr.yaml -parsimony 8
+```
+
+It looks like this code prepared all of the jobs appropriately above. We input 864 files and have 864 jobs. 
+
+*Note:* I noticed that in the previous ARC data from DE-analysis, there appears to be 1112 samples in the working dataset--Of these samples, 687 are from ARC, so I am wondering where this 864 comes from.
+
+
+#### Initial Error
+
+When I was initially running MiXCR with these data, I received the error:
+
+```
+java.lang.RuntimeException: java.io.IOException: No locks available
+        at com.milaboratory.o.cG.a(SourceFile:137)
+        at com.milaboratory.o.cJ$a.run(SourceFile:484)
+Caused by: java.io.IOException: No locks available
+        at java.base/sun.nio.ch.FileDispatcherImpl.lock0(Native Method)
+        at java.base/sun.nio.ch.FileDispatcherImpl.lock(FileDispatcherImpl.java:96)
+        at java.base/sun.nio.ch.FileChannelImpl.lock(FileChannelImpl.java:1119)
+        at java.base/java.nio.channels.FileChannel.lock(FileChannel.java:1063)
+        at com.milaboratory.o.cG.a(SourceFile:116)
+        ... 1 more
+License manager thread died.
+License error: UnknownError
+```
+
+LLMs did not have a good response to this that was feasible, so I explored the MiXCR github since I had not received the error in the past. The discussion is documented at: https://github.com/milaboratory/mixcr/issues/1923 .
+
+
+I had to [request a new academic license](https://platforma.bio/getlicense/) from mixcr since my previous one had expired.
+
+I successfully activated the new license and it appears it runs fine now.
+
+# Immunarch
+
+### Diversity Processing
+
+```{r, echo = FALSE}
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(readxl))
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(gridExtra))
+library(immunarch)
+"%&%"=function(a,b) paste(a,b,sep="")
+
+```
+
+```{r load_demographics}
+arc_dir <- "/projects/rpci/songyao/pnfioric/arc_project/"
+
+base_path <- "/projects/rpci/songyao/pnfioric/arc_project/airr_calculation/tcr_quant/results"
+
+file1<-read_xlsx(arc_dir %&% "ER Backfill AsA Only RNAseq clinical data.xlsx") %>% rename(Sample=FASTQ_RS)
+fwrite(file1, base_path %&% "metadata.txt", col.names = T, sep = "\t", row.names = F, quote = F)
+
+#file2 <- read_xlsx(arc_dir %&% "Updated ARC RNAseq clinical data 02-25-2026.xlsx")
+```
+
+The file we are reading above here as `file1` is a broader sample information file that includes information to the demographics and processing of these samples. This file includes `r nrow(file1)` samples in it. All of these samples are from the ARC study, and it appears there are no validation samples in this group.
+
+*Notably*, in there are 865 FASTQ samples that I processed with MiXCR, so not all of them will overlap.
+
+```{r}
+protein_products <- c("IGH", "IGK", "IGL", "TRA", "TRB", "TRD", "TRG")
+
+immdata_list <- list()
+for (chain in protein_products) {
+
+  files <- list.files(
+    path = base_path,
+    pattern = paste0("clones_", chain, "\\.tsv$"),
+    full.names = TRUE
+  )
+  cat("Found", length(files), "files for", chain, "\n")
+  if (length(files) == 0) next
+  immdata <- tryCatch(
+    repLoad(files),
+    error = function(e) {
+      message("Failed loading ", chain)
+      message(e)
+      NULL
+    }
+  )
+  if (!is.null(immdata)) {
+    object_name <- paste0("immdata_", chain)
+    assign(object_name, immdata)
+    immdata_list[[object_name]] <- immdata
+  }
+}
+
+```
+
+# Loop over Diversity Calculations
+
+```{r, warning= FALSE}
+suffixes <- protein_products
+
+# Initialize empty lists to store results
+div_hill_list <- list()
+div_d50_list <- list()
+div_div_list <- list()
+div_gini_simp_list <- list()
+div_raref_list <- list()
+
+# Loop over each suffix
+for (suf in suffixes) {
+  # Construct the variable name dynamically
+  immdata_name <- paste0("immdata_", suf)
+  
+  # Check if the object exists
+  if (exists(immdata_name)) {
+    immdata_obj <- get(immdata_name)  # Retrieve the object
+
+    # Calculate diversity measures
+    div_hill_list[[suf]] <- repDiversity(immdata_obj$data, "hill")
+    div_d50_list[[suf]] <- repDiversity(immdata_obj$data, "d50")
+    div_div_list[[suf]] <- repDiversity(immdata_obj$data, "div")
+    div_gini_simp_list[[suf]] <- repDiversity(immdata_obj$data, "gini.simp")
+    #div_raref_list[[suf]] <- repDiversity(immdata_obj$data, "raref")
+  } else {
+    warning(paste("Object", immdata_name, "not found. Skipping."))
+  }
+}
+# The results are stored in:
+# div_hill_list: Hill numbers for each suffix
+# div_d50_list: D50 diversity for each suffix
+# div_div_list: Ecological diversity for each suffix
+
+# Example: Accessing the Hill numbers for IGH
+#div_hill_list[["IGH"]]
+
+```
+
+## Convert all to Data.tables
+
+```{r}
+div_hill_df <- bind_rows(lapply(names(div_hill_list), function(suf) {
+  df <- as.data.frame(div_hill_list[[suf]])  # Ensure it's a data frame
+  df$suffix <- suf  # Add suffix column
+  return(df)
+}), .id = "dataset")
+
+div_d50_df <- bind_rows(lapply(names(div_d50_list), function(suf) {
+  df <- as.data.frame(div_d50_list[[suf]])  # Ensure it's a data frame
+  df$suffix <- suf  # Add suffix column
+  return(df)
+}), .id = "dataset")
+div_d50_df$Sample <- rownames(div_d50_df)
+div_d50_df<- div_d50_df %>% rename(Value=Clones)
+
+div_div_df <- bind_rows(lapply(names(div_div_list), function(suf) {
+  df <- as.data.frame(div_div_list[[suf]])  # Ensure it's a data frame
+  df$suffix <- suf  # Add suffix column
+  return(df)
+}), .id = "dataset")
+#div_div_df$Sample <- rownames(div_div_df)
+
+div_gini_simp_df <- bind_rows(lapply(names(div_gini_simp_list), function(suf) {
+  df <- as.data.frame(div_gini_simp_list[[suf]])  # Ensure it's a data frame
+  df$suffix <- suf  # Add suffix column
+  return(df)
+}), .id = "dataset")
+#div_div_df$Sample <- rownames(div_div_df)
+
+#div_raref_df <- bind_rows(lapply(names(div_raref_list), function(suf) {
+#  df <- as.data.frame(div_raref_list[[suf]])  # Ensure it's a data frame
+#  df$suffix <- suf  # Add suffix column
+ # return(df)
+#}), .id = "dataset")
+
+all_div_df <- bind_rows(
+  #div_hill_df %>% mutate(Diversity = "Div_Hill"),
+  div_d50_df %>% mutate(Diversity = "Div_D50"),
+  div_div_df %>% mutate(Diversity = "Div_Div"),
+  div_gini_simp_df %>% mutate(Diversity = "Div_GiniSimp")
+)
+
+all_div_wide <- all_div_df  %>% 
+  mutate(Sample=gsub("mixcr_", "", Sample)) %>% 
+  mutate(Sample=gsub(".clones.*","", Sample)) %>%
+  pivot_wider(
+    id_cols = Sample,
+    names_from = c(Diversity, suffix),
+    names_sep = "_",
+    values_from = Value
+  )
+
+fwrite(all_div_wide, arc_dir %&% "airr_calculation/results/all_div_calculations.csv", row.names = F, col.names = T, sep = ",", quote = F )
+fwrite(all_div_wide, arc_dir %&% "airr_calculation/results/all_div_calculations.txt", row.names = F, col.names = T, sep = "\t", quote = F )
+```
+
+## Hill Diversity
+
+```{r}
+div_hill_df$Sample <- gsub(".clones.*","", div_hill_df$Sample)
+div_hill_df_meta <- left_join(div_hill_df, file1, by = "Sample") %>% filter(!is.na(ER))
+
+igh_meta <- immdata_IGH$meta
+igh_meta$RS_ID <- str_extract(igh_meta$Sample, "RS-\\d+")
+igh_meta <- left_join(igh_meta, file1, by = c("RS_ID"= "Sample"))
+igh_meta$Sample <-  gsub(".clones.*","", igh_meta$Sample)
+
+div_hill_df$Sample <- gsub(".clones.*","", div_hill_df$Sample)
+div_hill_df_meta <- left_join(div_hill_df, igh_meta, by = "Sample") %>% filter(!is.na(ER))
+
+fwrite(div_hill_df_meta, arc_dir %&% "airr_calculation/results/div_hill_data_mixcr.txt", col.names = T, row.names = F, sep = "\t", quote = F)
+
+
+ggplot(div_hill_df_meta, aes(x = as.factor(Q),
+                             y = Value,
+                             fill = interaction(ER, race))) +
+  geom_boxplot() +
+  theme_bw() + facet_wrap(~suffix, scales="free_y", nrow=1)
+```
+
+## Div D50 List
+
+```{r}
+div_d50_df$Sample <- gsub(".clones.*","", div_d50_df$Sample)
+div_d50_df_meta <- left_join(div_d50_df, igh_meta, by = "Sample") %>% filter(!is.na(ER))
+
+fwrite(div_d50_df_meta, arc_dir %&% "airr_calculation/results/div_d50_data_mixcr.txt", col.names = T, row.names = F, sep = "\t", quote = F)
+
+ggplot(div_d50_df_meta, aes(x = interaction(ER, race),
+                             y = Value,
+                             fill = interaction(ER, race))) +
+  geom_boxplot() +
+  theme_bw() + facet_wrap(~suffix, scales="free_y", nrow=1)
+```
+
+
+## Ecological Diversity
+
+```{r}
+div_div_df$Sample <- gsub(".clones.*","", div_div_df$Sample)
+div_div_df_meta <- left_join(div_div_df, igh_meta, by = "Sample") %>% filter(!is.na(ER))
+
+fwrite(div_div_df_meta, arc_dir %&% "airr_calculation/results/div_diversity_eco_data_mixcr.txt", col.names = T, row.names = F, sep = "\t", quote = F)
+
+ggplot(div_div_df_meta, aes(x = interaction(ER, race),
+                             y = Value,
+                             fill = interaction(ER, race))) +
+  geom_boxplot() +
+  theme_bw() + facet_wrap(~suffix, scales="free_y", nrow=1) #+ stat_compare_means(method = "anova", label = "p.format") 
+```
+
+# Gini-Simpson Index
+
+```{r}
+div_gini_simp_df$Sample <- gsub(".clones.*","", div_gini_simp_df$Sample)
+div_gini_simp_df_meta <- left_join(div_gini_simp_df, igh_meta, by = "Sample") %>% filter(!is.na(ER))
+
+fwrite(div_gini_simp_df_meta, arc_dir %&% "airr_calculation/results/div_gini_simp_data_mixcr.txt", col.names = T, row.names = F, sep = "\t", quote = F)
+```
+
+# Combine into one file
+
+```{r}
+#
+div_values <- div_div_df_meta %>%
+  select(Sample, Div_Div=Value, suffix, RS_ID) %>%
+  pivot_wider(
+    id_cols = c(Sample, RS_ID),
+    names_from = suffix,
+    values_from = Div_Div,
+    names_prefix = "Div_Div_"
+  )
+
+d50_values <- div_d50_df_meta %>%
+  select(Sample, Div_D50=Clones, suffix, RS_ID )%>%
+  pivot_wider(
+    id_cols = c(Sample, RS_ID),
+    names_from = suffix,
+    values_from = Div_D50,
+    names_prefix = "Div_D50_"
+  )
+
+gini_values <- div_gini_simp_df_meta %>%
+  select(Sample,Div_GiniSimp=Value, suffix, RS_ID) %>%
+  pivot_wider(
+    id_cols = c(Sample, RS_ID),
+    names_from = suffix,
+    values_from = Div_GiniSimp,
+    names_prefix = "Div_GiniSimp_"
+  )
+
+```
+
+
+```{r}
+library(dplyr)
+library(parallel)
+
+# Create a named list of your immdata_* objects
+immdata_list <- list(
+  IGH = immdata_IGH,
+  IGK = immdata_IGK,
+  IGL = immdata_IGL,
+  TRA = immdata_TRA,
+  TRB = immdata_TRB,
+  TRD = immdata_TRD,
+  TRG = immdata_TRG
+)
+
+# General processing function
+process_chain <- function(chain_name, immdata_obj) {
+  df <- immdata_obj$meta
+  
+  # Extract base ID
+  df$BaseID <- gsub(paste0("\\.clonotypes\\.", chain_name), "", df[,1])
+  
+  # Identify clonotype rows for this chain
+  is_clonotype_row <- grepl(paste0("clonotypes\\.", chain_name), df[,1])
+  
+  sample_rows <- df[!is_clonotype_row, ]
+  clonotype_rows <- df[is_clonotype_row, ]
+  
+  clonotype_rows <- clonotype_rows[, c("BaseID"), drop=FALSE]
+  
+  df_clean <- merge(sample_rows, clonotype_rows, by="BaseID", all.x=TRUE)
+  
+  df_clean$ClonotypeID <- paste0(df_clean$BaseID, ".clonotypes.", chain_name)
+  df_clean$Sample <- df_clean$ClonotypeID
+  
+  df_clean <- df_clean %>% select(-BaseID, -ClonotypeID)
+  
+  # Overwrite the meta data inside the immdata object
+  immdata_obj$meta <- df_clean
+  
+  return(immdata_obj)
+}
+
+# Now apply across all chains
+processed_immdata_list <- mapply(process_chain, names(immdata_list), immdata_list, SIMPLIFY = FALSE)
+
+# You now have:
+# processed_immdata_list$IGH
+# processed_immdata_list$TRB
+# etc.
+
+```
+
+# Basic Clonality
+
+## Volume
+
+```{r, volume}
+#group_levels <- levels(interaction(meta$race, meta$ER, drop = TRUE))
+#colors_pal <- colorRampPalette(c("#68c766", "#a9e3a7",  "#9c6ba6", "#420353"))(length(group_levels))
+
+plot_list_race_er <- list()
+
+# Loop through each chain
+for (chain in protein_products) {
+  #message("Processing: ", chain)
+
+  data <- processed_immdata_list[[chain]]$data
+  meta <- processed_immdata_list[[chain]]$meta
+  meta <- meta %>% filter(!is.na(race), !is.na(ER))
+
+  # Run repExplore
+  exp_vol <- repExplore(data, .method = "volume", .coding = T)
+
+  # Visualization with two groupings
+  p2 <- vis(exp_vol, .by = c("race", "ER"), .meta = meta) + ggtitle(paste(chain, "- Race x ER"))
+
+  plot_list_race_er[[chain]] <- p2
+  print(p2)
+}
+```
+
+## Length
+
+```{r, fig.width =18}
+plot_list_race_er <- list()
+
+for (chain in protein_products) {
+  data <- processed_immdata_list[[chain]]$data
+  meta <- processed_immdata_list[[chain]]$meta
+  
+  # Skip if data is NULL or not a list/data.frame
+  if (is.null(data) || length(data) == 0 || all(sapply(data, is.null))) {
+    message(paste("Skipping", chain, ": no usable data"))
+    next
+  }
+
+  # Filter meta
+  meta <- meta %>% filter(!is.na(race), !is.na(ER))
+  
+  # Optionally remove samples with no clonotypes
+  data <- data[sapply(data, function(x) !is.null(x) && nrow(x) > 0)]
+  
+  if (length(data) == 0) {
+    message(paste("Skipping", chain, ": no clonotypes in any sample"))
+    next
+  }
+
+  # Run repExplore and plot
+  exp_vol <- repExplore(data, .method = "len", .col = "aa")
+  p2 <- vis(exp_vol, .by = c("race", "ER"), .meta = meta, .width=0) +
+    ggtitle(paste(chain, "- Race x ER"))
+  
+  plot_list_race_er[[chain]] <- p2
+  print(p2)
+}
+
+
+```
+
+## Count
+
+```{r}
+plot_list_race_er <- list()
+
+for (chain in protein_products) {
+  data <- processed_immdata_list[[chain]]$data
+  meta <- processed_immdata_list[[chain]]$meta
+  
+  # Skip if data is NULL or not a list/data.frame
+  if (is.null(data) || length(data) == 0 || all(sapply(data, is.null))) {
+    message(paste("Skipping", chain, ": no usable data"))
+    next
+  }
+
+  # Filter meta
+  meta <- meta %>% filter(!is.na(race), !is.na(ER))
+  
+  # Optionally remove samples with no clonotypes
+  data <- data[sapply(data, function(x) !is.null(x) && nrow(x) > 0)]
+  
+  if (length(data) == 0) {
+    message(paste("Skipping", chain, ": no clonotypes in any sample"))
+    next
+  }
+
+  # Run repExplore and plot
+  exp_vol <- repExplore(data, .method = "count")
+  p2 <- vis(exp_vol, .by = c("race", "ER"), .meta = meta) +
+    ggtitle(paste(chain, "- Race x ER"))
+  
+  plot_list_race_er[[chain]] <- p2
+  print(p2)
+}
+```
+
+# Clonality
+
+```{r, eval = FALSE}
+imm_pr_total <- data.table()
+imm_hom_total <- data.table()
+
+for (chain in protein_products) {
+  data <- processed_immdata_list[[chain]]$data
+  meta <- processed_immdata_list[[chain]]$meta
+  
+  # Skip if data is NULL or not a list/data.frame
+  if (is.null(data) || length(data) == 0 || all(sapply(data, is.null))) {
+    message(paste("Skipping", chain, ": no usable data"))
+    next
+  }
+
+  # Filter meta
+  meta <- meta %>% filter(!is.na(race), !is.na(ER))
+  
+  # Optionally remove samples with no clonotypes
+  data <- data[sapply(data, function(x) !is.null(x) && nrow(x) > 0)]
+  
+  if (length(data) == 0) {
+    message(paste("Skipping", chain, ": no clonotypes in any sample"))
+    next
+  }
+
+  # Run repExplore and plot
+  imm_pr <-  repClonality(data, .method = "top", .head = c(10, 100, 1000, 3000, 10000))
+  imm_pr$suffix <- chain
+  
+  
+  imm_hom <- repClonality(data,
+      .method = "homeo",
+      .clone.types = c(Small = .0001, Medium = .001, Large = .01, Hyperexpanded = 1)
+    )
+  imm_hom$suffix <- chain
+  
+  imm_pr_total <- bind_rows(imm_pr_total, imm_pr)
+  imm_hom_total <- bind_rows(imm_hom_total, imm_hom)
+
+}
+```
+
+# Gene usage
+
+```{r}
+# Loop over each chain in your processed_immdata_list
+for (chain in names(processed_immdata_list)) {
+  cat("Processing:", chain, "\n")
+  # Run pubRep on each chain, using "aa+v" and coding sequences only
+  rep_list[[chain]] <- pubRep(
+    processed_immdata_list[[chain]]$data,
+    "aa+v",
+    .verbose = TRUE,
+    .coding = TRUE
+  )
+}
+```
+
+
+```{r, eval = FALSE}
+pr.trb <- pubRep(immdata_TRB$data, "aa+v", .verbose = T, .coding = T)
+db <- dbLoad(file_path, "vdjdb", "HomoSapiens", "TRB")
+
+```
+
+```{r}
+pubrep_list <- list()
+
+# Loop over each chain in your processed_immdata_list
+for (chain in names(processed_immdata_list)) {
+  cat("Processing:", chain, "\n")
+  # Run pubRep on each chain, using "aa+v" and coding sequences only
+  pubrep_list[[chain]] <- pubRep(
+    processed_immdata_list[[chain]]$data,
+    "aa",
+    .verbose = TRUE,
+    .coding = TRUE
+  )
+}
+
+```
+
+```{r}
+pubrep_list_v <- list()
+
+# Loop over each chain in your processed_immdata_list
+for (chain in names(processed_immdata_list)) {
+  cat("Processing:", chain, "\n")
+  # Run pubRep on each chain, using "aa+v" and coding sequences only
+  pubrep_list_v[[chain]] <- pubRep(
+    processed_immdata_list[[chain]]$data,
+    "aa+v",
+    .verbose = TRUE,
+    .coding = TRUE
+  )
+}
+```
+
+
+```{r}
+vdjdb = dbLoad("https://gitlab.com/immunomind/immunarch/raw/dev-0.5.0/private/vdjdb.slim.txt.gz", "vdjdb", .species = "HomoSapiens")
+```
+
+```{r}
+pr1 <- pubRepFilter(pubrep_list$TRA, processed_immdata_list$TRA$meta, c(race = "Black"))
+pr2 <- pubRepFilter(pubrep_list$TRA, processed_immdata_list$TRA$meta, c(race = "White"))
+
+
+pr3 <- pubRepApply(pr1, pr2)
+```
+
+
+```{r}
+pr1 <- pubRepFilter(pubrep_list$IGH, processed_immdata_list$IGH$meta, c(race = "Black"))
+pr2 <- pubRepFilter(pubrep_list$IGH, processed_immdata_list$IGH$meta, c(race = "White"))
+
+
+pr3 <- pubRepApply(pr1, pr2)
+```
+

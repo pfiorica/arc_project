@@ -1,0 +1,13 @@
+java.lang.RuntimeException: java.io.IOException: Stale file handle
+	at com.milaboratory.o.cI.a(SourceFile:80)
+	at com.milaboratory.o.cL$a.run(SourceFile:491)
+Caused by: java.io.IOException: Stale file handle
+	at java.base/sun.nio.ch.FileDispatcherImpl.read0(Native Method)
+	at java.base/sun.nio.ch.FileDispatcherImpl.read(FileDispatcherImpl.java:48)
+	at java.base/sun.nio.ch.IOUtil.readIntoNativeBuffer(IOUtil.java:276)
+	at java.base/sun.nio.ch.IOUtil.read(IOUtil.java:245)
+	at java.base/sun.nio.ch.FileChannelImpl.read(FileChannelImpl.java:223)
+	at com.milaboratory.o.cI.a(SourceFile:66)
+	... 1 more
+License manager thread died.
+License error: UnknownError
